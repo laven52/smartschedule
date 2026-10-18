@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Отсчёт до пары</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --card: var(--tg-theme-secondary-bg-color, #f2f3f5);
+    --text: var(--tg-theme-text-color, #14171a);
+    --hint: var(--tg-theme-hint-color, #7b8794);
+    --accent: var(--tg-theme-button-color, #2481cc);
+    --green: #2fb36d;
+    --amber: #e8a317;
+    --done: #aab2bb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: var(--tg-theme-bg-color, #151a1f);
+      --card: var(--tg-theme-secondary-bg-color, #1f262d);
+      --text: var(--tg-theme-text-color, #eef2f5);
+      --hint: var(--tg-theme-hint-color, #8b97a3);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 16px;
+    max-width: 520px; margin: 0 auto;
+  }
+  .hero {
+    background: var(--card); border-radius: 20px; padding: 22px 18px 18px;
+    text-align: center; position: relative; overflow: hidden;
+  }
+  .phase { font-size: 14px; letter-spacing: .06em; text-transform: uppercase; color: var(--hint); font-weight: 600; }
+  .phase .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--accent); vertical-align: 1px; }
+  .hero.class .dot { background: var(--green); animation: pulse 1.6s ease-in-out infinite; }
+  .hero.break .dot { background: var(--amber); }
+  .hero.done .dot { background: var(--done); }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .clock {
+    font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: -.02em;
+    font-size: clamp(52px, 17vw, 84px); line-height: 1.05; margin: 14px 0 6px;
+    white-space: nowrap;
+  }
+  .clock .sep { opacity: .45; padding: 0 .02em; }
+  .subj { font-size: 18px; font-weight: 600; }
+  .meta { color: var(--hint); font-size: 14px; margin-top: 4px; min-height: 20px; }
+  .bar { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--text) 10%, transparent); margin-top: 18px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .4s linear; }
+  .hero.class .bar > i { background: var(--green); }
+  .hero.break .bar > i { background: var(--amber); }
+  .hero.done .bar { display: none; }
+  h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--hint); font-weight: 600; padding: 0 4px; }
+  ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  li {
+    background: var(--card); border-radius: 14px; padding: 12px 14px;
+    display: grid; grid-template-columns: auto 1fr auto; gap: 2px 12px; align-items: center;
+    border-left: 4px solid transparent;
+  }
+  li .t { font-variant-numeric: tabular-nums; font-weight: 600; }
+  li .n { font-weight: 500; }
+  li .r { color: var(--hint); font-size: 13px; }
+  li.done { opacity: .5; }
+  li.now { border-left-color: var(--green); }
+  li.next { border-left-color: var(--accent); }
+  .empty { text-align: center; color: var(--hint); padding: 40px 12px; }
+</style>
+</head>
+<body>
+<div id="app" hidden>
+  <section class="hero" id="hero">
+    <div class="phase"><span class="dot"></span><span id="phase">—</span></div>
+    <div class="clock" id="clock">00:00:00</div>
+    <div class="subj" id="subj"></div>
+    <div class="meta" id="meta"></div>
+    <div class="bar"><i id="fill"></i></div>
+  </section>
+  <h2>Сегодня</h2>
+  <ul id="list"></ul>
+</div>
+<div class="empty" id="empty" hidden>Нет данных для отсчёта.<br>Открой его кнопкой «⏱ Точный отсчёт» в боте.</div>
+
+<script>
+(function () {
+  var tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
+
+  function decode(b64) {
+    b64 = b64.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+  }
+
+  var data = null;
+  try {
+    var m = /(?:^#|&)d=([^&]+)/.exec(location.hash);
+    if (m) data = decode(m[1]);
+  } catch (e) {}
+  if (!data || !data.c || !data.c.length) {
+    document.getElementById('empty').hidden = false;
+    return;
+  }
+
+  var classes = data.c.map(function (x) { return { s: x[0], e: x[1], n: x[2], r: x[3] }; })
+                      .sort(function (a, b) { return a.s - b.s; });
+  // поправка на неверные часы телефона: берём время бота
+  var offset = data.t * 1000 - Date.now();
+  var $ = function (id) { return document.getElementById(id); };
+  document.getElementById('app').hidden = false;
+
+  function hhmm(ts) {
+    var d = new Date(ts * 1000);
+    var h = d.getUTCHours() + 5; // Алматы = UTC+5, без перехода на летнее время
+    return String((h + 24) % 24).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+  }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function fmt(sec) {
+    sec = Math.max(0, sec);
+    var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    return pad(h) + '<span class="sep">:</span>' + pad(m) + '<span class="sep">:</span>' + pad(s);
+  }
+
+  // список пар строится один раз
+  $('list').innerHTML = classes.map(function (c, i) {
+    return '<li id="li' + i + '"><span class="t">' + hhmm(c.s) + '–' + hhmm(c.e) + '</span>' +
+           '<span class="n"></span><span class="r"></span></li>';
+  }).join('');
+  classes.forEach(function (c, i) {
+    var li = $('li' + i);
+    li.querySelector('.n').textContent = c.n;
+    li.querySelector('.r').textContent = c.r ? 'ауд. ' + c.r : '';
+  });
+
+  var lastPhase = '';
+  function tick() {
+    var now = (Date.now() + offset) / 1000;
+    var kind, label, target, from = null, subj = '', meta = '', cur = -1, next = -1;
+
+    for (var i = 0; i < classes.length; i++) {
+      var c = classes[i];
+      if (now >= c.s && now < c.e && cur < 0) cur = i;
+      if (now < c.s && next < 0) next = i;
+    }
+    if (cur >= 0) {
+      var c1 = classes[cur];
+      kind = 'class'; label = 'До конца пары'; target = c1.e; from = c1.s; subj = c1.n;
+      meta = hhmm(c1.s) + '–' + hhmm(c1.e) + (c1.r ? ' · ауд. ' + c1.r : '');
+      var nx = classes[cur + 1];
+      if (nx) meta += ' · дальше: ' + nx.n + ' в ' + hhmm(nx.s);
+    } else if (next >= 0) {
+      var n1 = classes[next], prev = classes[next - 1];
+      subj = n1.n;
+      meta = hhmm(n1.s) + '–' + hhmm(n1.e) + (n1.r ? ' · ауд. ' + n1.r : '');
+      if (prev) { kind = 'break'; label = 'До конца перемены'; target = n1.s; from = prev.e; }
+      else { kind = 'wait'; label = 'До начала пары'; target = n1.s; }
+    } else {
+      kind = 'done'; label = 'Пары закончились'; subj = 'На сегодня всё 🎉';
+    }
+
+    var hero = $('hero');
+    hero.className = 'hero ' + kind;
+    $('phase').textContent = label;
+    $('subj').textContent = subj;
+    $('meta').textContent = meta;
+    if (target) {
+      $('clock').innerHTML = fmt(Math.ceil(target - now));
+      $('fill').style.width = from ? Math.min(100, Math.max(0, (now - from) / (target - from) * 100)) + '%' : '0%';
+    } else {
+      $('clock').innerHTML = fmt(0);
+    }
+    classes.forEach(function (c, i) {
+      $('li' + i).className = i === cur ? 'now' : (now >= c.e ? 'done' : (i === next && cur < 0 ? 'next' : ''));
+    });
+
+    var key = kind + ':' + (cur >= 0 ? cur : next);
+    if (lastPhase && key !== lastPhase && tg && tg.HapticFeedback) {
+      try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) {}
+    }
+    lastPhase = key;
+  }
+
+  tick();
+  // обновляем ровно на границе секунды
+  (function loop() {
+    tick();
+    setTimeout(loop, 1000 - ((Date.now() + offset) % 1000) + 5);
+  })();
+})();
+</script>
+</body>
+</html>
