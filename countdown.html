@@ -139,6 +139,12 @@
     li.querySelector('.r').textContent = c.r ? 'ауд. ' + c.r : '';
   });
 
+  function plain(sec) {
+    sec = Math.max(0, Math.ceil(sec));
+    var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), x = sec % 60;
+    return (h ? h + ' ч ' : '') + pad(m) + ' мин ' + pad(x) + ' с';
+  }
+
   function periods(s, e) {
     var out = [], t = s;
     while (true) {
@@ -171,13 +177,14 @@
       for (var k = 0; k < per.length; k++) {
         var p = per[k], pn = per[k + 1];
         if (now >= p[0] && now < p[1]) {
-          if (pn) { label = 'До перерыва · урок ' + (k + 1) + ' из ' + per.length; target = p[1]; from = p[0]; }
+          if (pn) { label = 'До перерыва · урок ' + (k + 1) + ' из ' + per.length; target = p[1]; from = p[0];
+                    meta = 'До конца пары: ' + plain(c1.e - now) + ' · ' + hhmm(c1.s) + '–' + hhmm(c1.e) + (c1.r ? ' · ауд. ' + c1.r : ''); }
           else if (per.length > 1) { label = 'До конца пары · урок ' + (k + 1) + ' из ' + per.length; from = p[0]; }
           break;
         }
         if (pn && now >= p[1] && now < pn[0]) {
           kind = 'break'; label = 'Перемена'; target = pn[0]; from = p[1];
-          meta = 'Дальше урок ' + (k + 2) + ' из ' + per.length + ' · пара до ' + hhmm(c1.e);
+          meta = 'Дальше урок ' + (k + 2) + ' из ' + per.length + ' · до конца пары: ' + plain(c1.e - now);
           break;
         }
       }
