@@ -269,7 +269,7 @@ function apply(){
   if (!ops.length) return;
   const payload = JSON.stringify({w: D.o, h: D.h, nt: notify ? 1 : 0, o: ops});
   haptic("ok");
-  if (tg && tg.initData !== undefined && tg.sendData && tg.initData !== "") { tg.sendData(payload); }
+  if (tg && tg.sendData && tg.platform && tg.platform !== "unknown") { tg.sendData(payload); }
   else { document.body.innerHTML = `<div class="err"><b>Демо-режим</b><br><br>Вне Telegram данные не отправляются.<br><small>${esc(payload)}</small></div>`; }
 }
 
