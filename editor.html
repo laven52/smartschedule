@@ -108,6 +108,14 @@ button{border:0;background:none;cursor:pointer}
 .shift button{height:46px;border-radius:12px;background:var(--card);font-weight:600;font-size:14px}
 .shift button:active{background:var(--accent);color:#fff}
 .shift button:disabled{opacity:.35}
+.datepick{display:grid;gap:8px}
+.datepick input{width:100%;min-width:0;border:0;background:var(--card);border-radius:12px;padding:12px;font-size:16px;font-weight:600;color:var(--text);-webkit-appearance:none;appearance:none;outline:none;box-sizing:border-box;min-height:46px}
+.datepick button{height:46px;border-radius:12px;background:var(--card);font-weight:600;font-size:14px}
+.datepick button:disabled{opacity:.4}
+.away{margin:12px 10px 120px;background:var(--card);border-radius:14px;padding:10px 12px}
+.away>b{display:block;margin-bottom:4px;font-size:14px}
+.away button{display:block;width:100%;text-align:left;padding:9px 0;border-top:1px solid var(--line);font-size:14px;color:var(--text)}
+.away small{display:block;color:var(--sub,#7b8794);font-size:12.5px;margin-top:2px}
 .days{display:flex;flex-wrap:wrap;gap:6px}
 .days button{padding:9px 12px;border-radius:12px;background:var(--card);font-weight:600;font-size:14px}
 .days button.cur{background:var(--accent);color:#fff}
@@ -160,6 +168,9 @@ const hm = m => String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).pa
 const dObj = iso => new Date(iso + "T12:00:00");
 const dayShort = iso => DN[(dObj(iso).getDay()+6)%7];
 const dayLong = iso => { const d = dObj(iso); return DN[(d.getDay()+6)%7].toUpperCase() + " " + d.getDate() + " " + MN[d.getMonth()]; };
+const addDays = (iso, n) => new Date(new Date(iso + "T12:00:00Z").getTime() + n*864e5).toISOString().slice(0,10);
+const isHol = iso => (D.hol || []).some(r => iso >= r[0] && iso <= r[1]);
+const dateOk = iso => iso >= todayIso && (!D.mx || iso <= D.mx) && (dObj(iso).getDay() !== 0) && !isHol(iso);
 const snap = (m, st) => Math.round(m/st)*st;
 function haptic(k){ try { tg && tg.HapticFeedback && (k==="ok" ? tg.HapticFeedback.notificationOccurred("success") : tg.HapticFeedback.impactOccurred(k||"light")); } catch(e){} }
 let toastT;
@@ -178,7 +189,7 @@ try { if (localStorage.getItem("ed_tip_seen")) showTip = false; } catch(e){}
 function demo(){
   const t = new Date(); const iso = o => new Date(t.getTime()+o*864e5).toISOString().slice(0,10);
   const r = (o,s,e,n,tg2,rm) => [iso(o),s,e,n,tg2,rm,iso(o),s,e,0,27];
-  return {t:"1 курс · Демо-группа", o:0, h:"demo", n:27, now:iso(0)+" 09:00", d:[iso(0),iso(1),iso(2),iso(3),iso(4)],
+  return {t:"1 курс · Демо-группа", o:0, h:"demo", n:27, hol:[], mx:iso(120), now:iso(0)+" 09:00", d:[iso(0),iso(1),iso(2),iso(3),iso(4)],
     i:[r(0,"09:00","10:40","Анализ данных","1-СН","309"), r(0,"11:10","14:00","Стартап 1 (ideation/validation)","","309"),
        r(1,"09:00","10:40","Макроэкономика","","210"), r(1,"11:10","12:50","Статистика","2-СН","115"),
        r(2,"12:00","13:40","Критическое мышление","91-СН","301"), r(3,"09:00","10:40","Анализ данных","1-СН","309")]};
@@ -274,6 +285,16 @@ function render(first){
   });
   g.append(cw); app.append(g);
   if (!items.some(it => cols.includes(it.nd))) app.append(el("div","empty","Здесь пар нет. Перетащи сюда пару с другого дня."));
+  const away = items.filter(it => !it.x && !D.d.includes(it.nd));
+  if (away.length) {
+    const box = el("div","away","<b>Перенесены на другие даты</b>");
+    away.forEach(it => {
+      const b = el("button", null, `${esc(it.subj)}<small>${dayLong(it.bd)} ${it.bs} → <b>${dayLong(it.nd)} ${it.ns}–${it.ne}</b></small>`);
+      b.onclick = () => { editIdx = items.indexOf(it); render(); };
+      box.append(b);
+    });
+    app.append(box);
+  }
 
   // нижняя панель
   const bar = el("div","bar");
@@ -441,6 +462,25 @@ function sheet(it){
     const days = el("div","days");
     D.d.forEach(d => { const b = el("button", d === it.nd ? "cur":"", dayLong(d)); b.onclick = () => { it.nd = d; if (view==="day") sel = d; haptic("light"); render(); }; days.append(b); });
     sh.append(days);
+
+    sh.append(el("div","lab","Или другая дата"));
+    const dp = el("div","datepick");
+    const di = el("input"); di.type = "date"; di.min = todayIso; if (D.mx) di.max = D.mx;
+    di.value = D.d.includes(it.nd) ? "" : it.nd;
+    di.onchange = () => {
+      const v = di.value; if (!v) return;
+      if (v < todayIso || (D.mx && v > D.mx)) return bad("Выбери дату от сегодня и не дальше, чем через 4 месяца");
+      if (dObj(v).getDay() === 0) return bad("В воскресенье занятий нет");
+      if (isHol(v)) return bad("В эти дни каникулы — занятий нет");
+      it.nd = v; if (view === "day" && D.d.includes(v)) sel = v; haptic("light"); render();
+    };
+    dp.append(di);
+    const wk = addDays(it.nd, 7);
+    const wb = el("button", null, "📅 На неделю позже · " + dayLong(wk));
+    wb.disabled = !dateOk(wk);
+    wb.onclick = () => { it.nd = wk; haptic("light"); render(); };
+    dp.append(wb); sh.append(dp);
+    if (!D.d.includes(it.nd)) sh.append(el("div","warn","ℹ️ Пара перенесена на другую неделю — в сетке она не видна, найди её внизу в списке «Перенесены на другие даты». Проверь, что в это время у группы нет другой пары."));
   } else {
     sh.append(el("div","warn","🚫 Пара отменена: студенты увидят её зачёркнутой, напоминаний не будет."));
   }
