@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Мой календарь</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:var(--tg-theme-bg-color,#f3f5f9);
+  --card:var(--tg-theme-secondary-bg-color,#ffffff);
+  --text:var(--tg-theme-text-color,#14213d);
+  --hint:var(--tg-theme-hint-color,#6b7587);
+  --accent:var(--tg-theme-button-color,#2f6bff);
+  --accent-text:var(--tg-theme-button-text-color,#fff);
+  --line:rgba(120,130,150,.25);
+  --green:#2e9b4f; --green-bg:rgba(46,155,79,.14);
+  --orange:#d9820b; --orange-bg:rgba(217,130,11,.16);
+  --red:#d6364b; --red-bg:rgba(214,54,75,.14);
+  --blue-bg:rgba(47,107,255,.13);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.35 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif}
+body{padding-bottom:calc(150px + env(safe-area-inset-bottom));overscroll-behavior:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+.top{position:sticky;top:0;z-index:20;background:var(--bg);padding:12px 16px 8px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.top .t{flex:1;min-width:0}
+.top b{display:block;font-size:18px}
+.top span{display:block;font-size:12px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.help{width:34px;height:34px;border-radius:17px;background:var(--line);font-weight:700;color:var(--hint)}
+.wrap{padding:14px 16px}
+h2{font-size:13px;letter-spacing:.05em;text-transform:uppercase;color:var(--hint);margin:20px 0 8px;font-weight:700}
+h2:first-child{margin-top:4px}
+.card{background:var(--card);border-radius:16px;padding:12px 14px;margin-bottom:8px}
+.hint{font-size:13px;color:var(--hint);margin:4px 2px 10px}
+.now{background:var(--accent);color:var(--accent-text);border-radius:16px;padding:12px 14px;margin-bottom:12px}
+.now small{display:block;opacity:.85;font-size:12px;margin-bottom:2px}
+.now b{font-size:16px}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.act{background:var(--card);border-radius:16px;padding:12px;text-align:left;border:2px solid transparent}
+.act b{display:block;font-size:14px}
+.act span{display:block;font-size:12px;color:var(--hint);margin-top:2px}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:10px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;padding:7px 14px;border-radius:20px;background:var(--card);border:2px solid transparent;font-weight:600;font-size:14px}
+.chip.on{border-color:var(--accent);background:var(--blue-bg)}
+.chip.day{min-width:58px;text-align:center;padding:6px 8px;border-radius:12px}
+.chip.day small{display:block;font-weight:400;font-size:11px;color:var(--hint)}
+.ev{display:flex;gap:10px;margin-bottom:8px}
+.ev .tm{width:48px;text-align:right;font-size:12.5px;color:var(--hint);padding-top:10px;line-height:1.3}
+.ev .bar{flex:1;border-radius:14px;padding:9px 12px;background:var(--blue-bg);border-left:5px solid var(--accent);min-width:0}
+.ev .bar>b{display:block;font-size:15px}
+.ev .bar>span{display:block;font-size:12.5px;color:var(--hint);margin-top:1px}
+.ev.muted .bar{opacity:.55;background:var(--card);border-left-color:var(--hint)}
+.ev.cx .bar{background:var(--red-bg);border-left-color:var(--red)}
+.ev.cx .bar>b{text-decoration:line-through}
+.ev.mv .bar{border-left-color:var(--orange);background:var(--orange-bg)}
+.tag{display:inline-block;font-size:11px;font-weight:700;border-radius:8px;padding:1px 7px;margin-left:6px;vertical-align:1px}
+.tag.m{background:var(--line);color:var(--hint)}.tag.c{background:var(--red-bg);color:var(--red)}.tag.v{background:var(--orange-bg);color:var(--orange)}
+.empty{text-align:center;color:var(--hint);padding:26px 10px}
+.row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .l{flex:1;min-width:0;font-size:15px}
+.row .l small{display:block;color:var(--hint);font-size:12px}
+.sw{flex:0 0 auto;width:46px;height:28px;border-radius:14px;background:#c3cad6;position:relative;transition:.15s}
+.sw:after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:11px;background:#fff;transition:.15s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.sw.on{background:var(--green)}.sw.on:after{left:21px}
+.opt{display:flex;gap:10px;align-items:center;padding:11px 12px;border-radius:14px;background:var(--card);border:2px solid transparent;margin-bottom:8px;width:100%;text-align:left}
+.opt.on{border-color:var(--accent);background:var(--blue-bg)}
+.opt .l{flex:1;min-width:0}
+.opt small{display:block;color:var(--hint);font-size:12px}
+.dot{width:22px;height:22px;border-radius:11px;border:2px solid var(--line);flex:0 0 auto}
+.opt.on .dot{border-color:var(--accent);background:var(--accent);box-shadow:inset 0 0 0 4px var(--card)}
+.mini{display:flex;gap:8px;margin:2px 0 10px}
+.mini button{padding:6px 12px;border-radius:10px;background:var(--line);font-size:13px;font-weight:600}
+.link{color:var(--accent);font-weight:600;font-size:14px}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--card);border-top:1px solid var(--line);display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+.tabs button{flex:1;padding:7px 0 5px;color:var(--hint);font-size:11.5px;font-weight:600;border-radius:12px}
+.tabs button i{display:block;font-style:normal;font-size:21px;line-height:1.2}
+.tabs button.on{color:var(--accent)}
+.save{position:fixed;left:12px;right:12px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:24;display:none;gap:8px}
+.save.show{display:flex}
+.save button{padding:13px;border-radius:14px;font-weight:700;font-size:15px}
+.save .ok{flex:1;background:var(--accent);color:var(--accent-text);box-shadow:0 6px 16px rgba(0,0,0,.2)}
+.save .no{background:var(--card);color:var(--text);box-shadow:0 6px 16px rgba(0,0,0,.15);padding:13px 18px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(130px + env(safe-area-inset-bottom));background:rgba(20,25,35,.92);color:#fff;border-radius:12px;padding:9px 14px;font-size:13.5px;z-index:60;display:none;max-width:88%}
+.err{padding:30px 20px;text-align:center;color:var(--hint)}
+/* подсказки при первом входе */
+.coach{position:fixed;inset:0;z-index:50;display:none}
+.coach.show{display:block}
+.coach .spot{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(8,12,24,.72);transition:.2s;pointer-events:none}
+.coach .box{position:fixed;left:16px;right:16px;background:var(--card);border-radius:18px;padding:14px 16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.coach .box b{font-size:16px}
+.coach .box p{margin:6px 0 12px;color:var(--text);font-size:14.5px}
+.coach .nav{display:flex;align-items:center;gap:8px}
+.coach .nav .dots{flex:1;color:var(--hint);font-size:12px}
+.coach .nav button{padding:9px 16px;border-radius:12px;font-weight:700}
+.coach .nav .skip{color:var(--hint)}
+.coach .nav .next{background:var(--accent);color:var(--accent-text)}
+</style>
+</head>
+<body>
+<div class="top"><div class="t"><b id="ttl">Мой календарь</b><span id="sub"></span></div><button class="help" id="help" aria-label="Подсказки">?</button></div>
+<div id="app"></div>
+<div class="save" id="save"><button class="no" id="cancel">Отмена</button><button class="ok" id="apply">Сохранить</button></div>
+<div class="tabs" id="tabs">
+  <button data-t="home" id="tab-home"><i>🗓</i>Расписание</button>
+  <button data-t="pick" id="tab-pick"><i>🎛</i>Мой выбор</button>
+  <button data-t="notif" id="tab-notif"><i>🔔</i>Уведомления</button>
+</div>
+<div class="toast" id="toast"></div>
+<div class="coach" id="coach"><div class="spot" id="spot"></div><div class="box" id="cbox"></div></div>
+<script>
+(function(){
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { try { tg.ready(); tg.expand(); tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch(e){} }
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const DN = ["вс","пн","вт","ср","чт","пт","сб"];
+const MN = ["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
+const toMin = s => { const m = /^(\d{1,2}):(\d{2})$/.exec(s||""); return m ? (+m[1])*60 + +m[2] : -1; };
+const dObj = iso => new Date(iso + "T12:00:00");
+function haptic(k){ try { tg && tg.HapticFeedback && (k==="ok" ? tg.HapticFeedback.notificationOccurred("success") : tg.HapticFeedback.impactOccurred(k||"light")); } catch(e){} }
+let tT; function toast(t){ const e=$("#toast"); e.textContent=t; e.style.display="block"; clearTimeout(tT); tT=setTimeout(()=>e.style.display="none",2600); }
+const store = { get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch(e){} } };
+
+async function decode(blob){
+  let b = blob.replace(/-/g,"+").replace(/_/g,"/"); while (b.length % 4) b += "=";
+  const bin = atob(b); const u8 = Uint8Array.from(bin, c => c.charCodeAt(0));
+  const ds = new Blob([u8]).stream().pipeThrough(new DecompressionStream("deflate"));
+  return JSON.parse(await new Response(ds).text());
+}
+
+function demo(){
+  const t = new Date(); const iso = o => new Date(t.getTime()+o*864e5).toISOString().slice(0,10);
+  const r = (a,b,n,te,rm,f) => [a,b,n,te,rm,f||0];
+  return {k:"me", t:"1 курс · Демо-группа", now: iso(0)+" 11:00", h:"demo", ob:0,
+    days:[[iso(0),[r("09:00","10:40","Маркетинг-аналитика","Иванов А.Б.","312"),r("11:10","12:50","Казахский (русский) язык 1","Курмангожаева Э.С. (B1)","326"),r("14:20","15:10","Введение в маркетинг","","218",1)]],
+          [iso(1),[r("10:00","11:40","Статистика","Петров В.В.","115"),r("12:00","13:40","Критическое мышление","","301",2),r("14:20","15:10","Minor 3 - SMM и веб-аналитика","","218",4)]],
+          [iso(2),[]],[iso(3),[r("09:00","10:40","Анализ данных","Сидорова Н.Н.","309")]]],
+    sub:[["Анализ данных · 1-СН",1],["Введение в маркетинг",0],["Казахский (русский) язык 1",1],["Критическое мышление",1],["Макроэкономика",1],["Статистика",1]],
+    kz:{o:{A1:["Нуртазина А.О."],A2:["Сагатова Ш.Б.","Садыр Г.А"],B1:["Курмангожаева Э.С","Батилеуова Г.А."],B2:["Бейсембиев Б.К"]},c:null},
+    mi:{o:{"SMM и веб-аналитика":[],"Product Design":["поток 1","поток 2"],"Events Management":["поток 1","поток 2"],"Бухгалтер в бизнесе":[]},c:null},
+    nf:{"1h":true,"30m":true,"10m":true,start:true,brk:true,end:true,morning:true,mt:"06:00",cu:0}};
+}
+
+let D, S, S0, tab = "home", selDay = 0, pickKz = false, coachI = -1;
+const clone = o => JSON.parse(JSON.stringify(o));
+
+function init(d){
+  D = d;
+  S = { sub: D.sub.map(x => x[1]), kz: D.kz.c ? clone(D.kz.c) : null, mi: D.mi.c ? clone(D.mi.c) : null, nf: clone(D.nf) };
+  S0 = clone(S);
+  $("#sub").textContent = D.t || "";
+  const today = (D.now||"").slice(0,10);
+  selDay = Math.max(0, D.days.findIndex(x => x[0] === today));
+  render();
+  if (!D.ob && !store.get("me_tour")) setTimeout(() => coach(0), 350);
+}
+
+const dirty = () => JSON.stringify(S) !== JSON.stringify(S0);
+const changedKeys = () => ({ sub: JSON.stringify(S.sub) !== JSON.stringify(S0.sub), kz: JSON.stringify(S.kz) !== JSON.stringify(S0.kz),
+  mi: JSON.stringify(S.mi) !== JSON.stringify(S0.mi), nf: JSON.stringify(S.nf) !== JSON.stringify(S0.nf) });
+
+function go(t){ tab = t; pickKz = false; render(); window.scrollTo(0,0); haptic(); }
+
+function render(){
+  $$("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === tab));
+  const app = $("#app"); app.innerHTML = "";
+  const w = document.createElement("div"); w.className = "wrap"; app.appendChild(w);
+  (tab === "home" ? viewHome : tab === "pick" ? viewPick : viewNotif)(w);
+  $("#save").classList.toggle("show", dirty());
+  if (tg && tg.BackButton) { try { (tab !== "home" || dirty()) ? tg.BackButton.show() : tg.BackButton.hide(); } catch(e){} }
+}
+
+/* ───── Расписание ───── */
+function viewHome(w){
+  const nowS = (D.now||"").slice(11,16), today = (D.now||"").slice(0,10);
+  const day0 = D.days.find(x => x[0] === today);
+  let cur = null, nxt = null;
+  if (day0) for (const it of day0[1]) { if (it[5] & 2) continue; const a = toMin(it[0]), b = toMin(it[1]), n = toMin(nowS);
+    if (a <= n && n < b) cur = it; else if (a > n && !nxt) nxt = it; }
+  if (cur) w.insertAdjacentHTML("beforeend", `<div class="now"><small>Сейчас идёт · до ${esc(cur[1])}</small><b>${esc(cur[2])}${cur[4] ? " · каб. " + esc(cur[4]) : ""}</b></div>`);
+  else if (nxt) w.insertAdjacentHTML("beforeend", `<div class="now"><small>Дальше · в ${esc(nxt[0])}</small><b>${esc(nxt[2])}${nxt[4] ? " · каб. " + esc(nxt[4]) : ""}</b></div>`);
+  w.insertAdjacentHTML("beforeend", `<div class="acts">
+    <button class="act" data-go="pick"><b>🎛 Что-то лишнее?</b><span>Убрать предметы, выбрать уровень и майнор</span></button>
+    <button class="act" data-go="notif"><b>🔔 Слишком много?</b><span>Выключить или настроить уведомления</span></button></div>`);
+  const chips = document.createElement("div"); chips.className = "chips";
+  D.days.forEach((d, i) => { const o = dObj(d[0]); const b = document.createElement("button");
+    b.className = "chip day" + (i === selDay ? " on" : ""); b.innerHTML = `${DN[o.getDay()]}<small>${o.getDate()} ${MN[o.getMonth()]}</small>`;
+    b.onclick = () => { selDay = i; render(); haptic(); }; chips.appendChild(b); });
+  w.appendChild(chips);
+  const day = D.days[selDay];
+  if (!day || !day[1].length) w.insertAdjacentHTML("beforeend", `<div class="empty">В этот день пар нет 🎉</div>`);
+  else day[1].forEach(it => { const f = it[5]; const cls = (f & 2) ? "cx" : (f & 1) ? "muted" : (f & 4) ? "mv" : "";
+    const tag = (f & 2) ? `<span class="tag c">отменена</span>` : (f & 4) ? `<span class="tag v">перенос</span>` : (f & 1) ? `<span class="tag m">🔕 без уведомлений</span>` : "";
+    w.insertAdjacentHTML("beforeend", `<div class="ev ${cls}"><div class="tm">${esc(it[0])}<br>${esc(it[1])}</div><div class="bar"><b>${esc(it[2])}${tag}</b>
+      <span>${[it[4] ? "каб. " + esc(it[4]) : "", esc(it[3])].filter(Boolean).join(" · ") || "&nbsp;"}</span></div></div>`); });
+  w.insertAdjacentHTML("beforeend", `<div class="hint" style="margin-top:14px">Пары вне «Мой выбор» остаются в расписании, но без уведомлений (серые).</div>`);
+  $$("[data-go]", w).forEach(b => b.onclick = () => go(b.dataset.go));
+}
+
+/* ───── Мой выбор ───── */
+function viewPick(w){
+  const kzL = Object.keys(D.kz.o), miN = Object.keys(D.mi.o);
+  if (kzL.length) {
+    w.insertAdjacentHTML("beforeend", `<h2>🇰🇿 Казахский язык</h2><div class="hint">У каждого преподавателя в расписании свой уровень. Выбери свой, и бот покажет только твои пары.</div>`);
+    const chips = document.createElement("div"); chips.className = "chips";
+    kzL.forEach(l => { const b = document.createElement("button"); b.className = "chip" + (S.kz && S.kz.l === l ? " on" : ""); b.textContent = l;
+      b.onclick = () => { S.kz = { l, t: "" }; render(); haptic(); }; chips.appendChild(b); });
+    w.appendChild(chips);
+    if (S.kz) {
+      const ts = D.kz.o[S.kz.l] || [];
+      if (ts.length > 1) { w.insertAdjacentHTML("beforeend", `<div class="hint">На уровне ${esc(S.kz.l)} несколько преподавателей. К кому ходишь?</div>`);
+        const all = optEl("Не знаю, показывать всех", "", !S.kz.t, () => { S.kz.t = ""; render(); }); w.appendChild(all);
+        ts.forEach(t => w.appendChild(optEl(t, "", S.kz.t === t, () => { S.kz.t = t; render(); }))); }
+      w.insertAdjacentHTML("beforeend", `<div class="mini"><button id="kzx">Сбросить выбор</button></div>`);
+      $("#kzx", w).onclick = () => { S.kz = null; render(); };
+    }
+  }
+  if (miN.length) {
+    w.insertAdjacentHTML("beforeend", `<h2>🎯 Майнор</h2><div class="hint">В одно время у вас несколько майноров на выбор. Выбери свой, остальные скроются.</div>`);
+    miN.forEach(n => { const on = S.mi && S.mi.n === n; w.appendChild(optEl(n, (D.mi.o[n]||[]).length ? "потоки: " + D.mi.o[n].join(", ") : "", on, () => { S.mi = { n, s: "" }; render(); haptic(); })); });
+    if (S.mi && (D.mi.o[S.mi.n]||[]).length) {
+      w.insertAdjacentHTML("beforeend", `<div class="hint">Какой поток?</div>`);
+      const chips = document.createElement("div"); chips.className = "chips";
+      [["", "Любой"]].concat(D.mi.o[S.mi.n].map(s => [s, s])).forEach(([v, n]) => { const b = document.createElement("button");
+        b.className = "chip" + (S.mi.s === v ? " on" : ""); b.textContent = n; b.onclick = () => { S.mi.s = v; render(); }; chips.appendChild(b); });
+      w.appendChild(chips);
+    }
+    if (S.mi) { w.insertAdjacentHTML("beforeend", `<div class="mini"><button id="mix">Сбросить выбор</button></div>`); $("#mix", w).onclick = () => { S.mi = null; render(); }; }
+  }
+  w.insertAdjacentHTML("beforeend", `<h2>🔔 Предметы с уведомлениями</h2><div class="hint">Выключенный предмет остаётся в расписании, но бот по нему не напоминает.</div>
+    <div class="mini"><button id="all">Включить все</button><button id="none">Выключить все</button></div>`);
+  $("#all", w).onclick = () => { S.sub = S.sub.map(() => 1); render(); };
+  $("#none", w).onclick = () => { S.sub = S.sub.map(() => 0); render(); };
+  const card = document.createElement("div"); card.className = "card";
+  D.sub.forEach((x, i) => card.appendChild(rowSw(esc(x[0]), "", S.sub[i], v => { S.sub[i] = v; })));
+  w.appendChild(card);
+}
+
+function optEl(title, small, on, fn){
+  const b = document.createElement("button"); b.className = "opt" + (on ? " on" : "");
+  b.innerHTML = `<span class="dot"></span><span class="l">${esc(title)}${small ? `<small>${esc(small)}</small>` : ""}</span>`; b.onclick = fn; return b;
+}
+function rowSw(label, small, on, set){
+  const r = document.createElement("div"); r.className = "row";
+  r.innerHTML = `<div class="l">${label}${small ? `<small>${esc(small)}</small>` : ""}</div><button class="sw${on ? " on" : ""}" aria-label="переключить"></button>`;
+  const sw = $(".sw", r); sw.onclick = () => { on = on ? 0 : 1; sw.classList.toggle("on", !!on); set(on); $("#save").classList.toggle("show", dirty()); haptic(); }; return r;
+}
+
+/* ───── Уведомления ───── */
+function viewNotif(w){
+  const n = S.nf;
+  w.insertAdjacentHTML("beforeend", `<h2>Перед парой</h2><div class="hint">Базовые напоминания включены у всех. Здесь можно убрать лишнее.</div>`);
+  const c1 = document.createElement("div"); c1.className = "card";
+  [["1h","За 1 час до пары"],["30m","За 30 минут"],["10m","За 10 минут"],["start","Когда пара началась"],["brk","Перемена внутри пары"],["end","Когда пара закончилась"]]
+    .forEach(([k, l]) => c1.appendChild(rowSw(l, "", n[k] ? 1 : 0, v => { n[k] = !!v; })));
+  w.appendChild(c1);
+  w.insertAdjacentHTML("beforeend", `<h2>Своё время</h2><div class="hint">Ещё одно напоминание: за сколько минут до пары.</div>`);
+  const ch = document.createElement("div"); ch.className = "chips";
+  [[0,"Нет"],[5,"5 мин"],[15,"15 мин"],[20,"20 мин"],[45,"45 мин"],[90,"1,5 часа"]].forEach(([v, l]) => { const b = document.createElement("button");
+    b.className = "chip" + (n.cu === v ? " on" : ""); b.textContent = l; b.onclick = () => { n.cu = v; render(); haptic(); }; ch.appendChild(b); });
+  w.appendChild(ch);
+  w.insertAdjacentHTML("beforeend", `<h2>Утренняя сводка</h2><div class="hint">Одно сообщение утром: какие сегодня пары.</div>`);
+  const c2 = document.createElement("div"); c2.className = "card"; c2.appendChild(rowSw("Присылать сводку", "", n.morning ? 1 : 0, v => { n.morning = !!v; render(); })); w.appendChild(c2);
+  if (n.morning) { const ch2 = document.createElement("div"); ch2.className = "chips";
+    ["06:00","07:00","07:30","08:00"].forEach(t => { const b = document.createElement("button"); b.className = "chip" + (n.mt === t ? " on" : ""); b.textContent = t; b.onclick = () => { n.mt = t; render(); haptic(); }; ch2.appendChild(b); });
+    w.appendChild(ch2); }
+  w.insertAdjacentHTML("beforeend", `<div class="card" style="margin-top:14px"><b>🔒 Это отключить нельзя</b><div class="hint" style="margin:4px 0 0">Сообщения о переносе или отмене пары приходят всегда, чтобы ты не пропустил(а) изменения.</div></div>`);
+}
+
+/* ───── Сохранить / отмена ───── */
+function apply(){
+  const ch = changedKeys(), out = { k: "me", h: D.h };
+  if (ch.sub) out.sub = S.sub.map((v, i) => v ? i : -1).filter(i => i >= 0);
+  if (ch.kz) out.kz = S.kz || "";
+  if (ch.mi) out.mi = S.mi || "";
+  if (ch.nf) out.nf = S.nf;
+  out.ob = 1; store.set("me_tour", "1");
+  if (!dirty() && D.ob) return;
+  const payload = JSON.stringify(out);
+  haptic("ok");
+  if (tg && tg.sendData && tg.platform && tg.platform !== "unknown") tg.sendData(payload);
+  else document.body.innerHTML = `<div class="err"><b>Демо-режим</b><br><br>Вне Telegram данные не отправляются.<br><small>${esc(payload)}</small></div>`;
+}
+function cancel(){ S = clone(S0); render(); toast("Изменения отменены"); }
+$("#apply").onclick = apply; $("#cancel").onclick = cancel;
+$$("#tabs button").forEach(b => b.onclick = () => go(b.dataset.t));
+if (tg && tg.BackButton) { try { tg.BackButton.onClick(() => { if (dirty()) cancel(); else if (tab !== "home") go("home"); else if (tg.close) tg.close(); }); } catch(e){} }
+
+/* ───── Подсказки при первом входе ───── */
+const STEPS = [
+  { sel: "#tab-home", t: "🗓 Расписание", p: "Здесь твоя неделя. «Сейчас» и «Дальше» всегда сверху. Серые пары идут без уведомлений." },
+  { sel: "#tab-pick", t: "🎛 Мой выбор", p: "Выбери свой уровень казахского и свой майнор, выключи ненужные предметы. Чужое пропадёт из расписания." },
+  { sel: "#tab-notif", t: "🔔 Уведомления", p: "За сколько минут напоминать, нужна ли утренняя сводка. Ничего не трогай, если всё устраивает." },
+  { sel: null, t: "💾 Как сохранить", p: "Когда что-то поменяешь, внизу появятся «Сохранить» и «Отмена». «Отмена» вернёт всё как было, а кнопка «Назад» в Telegram работает так же. Подсказки можно открыть снова кнопкой «?»." }
+];
+function coach(i){
+  coachI = i; const c = $("#coach"), box = $("#cbox"), spot = $("#spot");
+  if (i >= STEPS.length) { c.classList.remove("show"); coachI = -1; store.set("me_tour", "1"); return; }
+  const st = STEPS[i]; c.classList.add("show");
+  if (st.sel) { const r = $(st.sel).getBoundingClientRect(); Object.assign(spot.style, { left: (r.left-4)+"px", top: (r.top-4)+"px", width: (r.width+8)+"px", height: (r.height+8)+"px", display: "block" }); box.style.top = "auto"; box.style.bottom = (innerHeight - r.top + 14) + "px"; }
+  else { spot.style.display = "none"; box.style.bottom = "auto"; box.style.top = "28%"; c.style.background = "rgba(8,12,24,.72)"; }
+  if (st.sel) c.style.background = "none";
+  box.innerHTML = `<b>${st.t}</b><p>${st.p}</p><div class="nav"><span class="dots">${i+1} из ${STEPS.length}</span><button class="skip" id="cs">Пропустить</button><button class="next" id="cn">${i === STEPS.length-1 ? "Понятно" : "Дальше"}</button></div>`;
+  $("#cs").onclick = () => coach(STEPS.length); $("#cn").onclick = () => coach(i + 1);
+}
+$("#help").onclick = () => coach(0);
+
+async function boot(){
+  const q = new URLSearchParams(location.search).get("d");
+  try { init(q ? await decode(q) : demo()); }
+  catch (e) { $("#app").innerHTML = `<div class="err"><b>Не удалось открыть окно</b><br><br>Закрой его и нажми кнопку в боте ещё раз (/me).</div>`; }
+}
+boot();
+})();
+</script>
+</body>
+</html>
