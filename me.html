@@ -84,6 +84,24 @@ h2:first-child{margin-top:4px}
 .save .ok{flex:1;background:var(--accent);color:var(--accent-text);box-shadow:0 6px 16px rgba(0,0,0,.2)}
 .save .no{background:var(--card);color:var(--text);box-shadow:0 6px 16px rgba(0,0,0,.15);padding:13px 18px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(130px + env(safe-area-inset-bottom));background:rgba(20,25,35,.92);color:#fff;border-radius:12px;padding:9px 14px;font-size:13.5px;z-index:60;display:none;max-width:88%}
+.tk{display:flex;gap:12px;align-items:flex-start;background:var(--card);border-radius:16px;padding:12px 14px;margin-bottom:8px;border-left:5px solid var(--accent);text-align:left;width:100%}
+.tk.soon{border-left-color:var(--orange)}.tk.hot{border-left-color:var(--red)}.tk.late{opacity:.6}
+.tk .ck{flex:0 0 auto;width:30px;height:30px;border-radius:15px;border:2px solid var(--line);font-size:16px;line-height:26px;text-align:center;color:transparent}
+.tk .ck:active{background:var(--green);color:#fff;border-color:var(--green)}
+.tk .b{flex:1;min-width:0}.tk .b b{display:block;font-size:15px;word-break:break-word}.tk .b small{display:block;color:var(--hint);font-size:12.5px;margin-top:2px}
+.tk .b small.u{color:var(--orange);font-weight:600}.tk .b small.h{color:var(--red);font-weight:600}
+.fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:22;width:56px;height:56px;border-radius:28px;background:var(--accent);color:var(--accent-text);font-size:30px;line-height:54px;text-align:center;box-shadow:0 8px 20px rgba(0,0,0,.28)}
+.sheet{position:fixed;inset:0;z-index:40;background:rgba(8,12,24,.55);display:none;align-items:flex-end}
+.sheet.show{display:flex}
+.sheet .in{width:100%;background:var(--bg);border-radius:22px 22px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto}
+.sheet h3{margin:0 0 10px;font-size:18px}
+.sheet label{display:block;font-size:12px;color:var(--hint);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 6px}
+.sheet input[type=text],.sheet input[type=date],.sheet input[type=time]{width:100%;padding:12px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--text);font:inherit}
+.sheet .chips{flex-wrap:wrap;overflow:visible}
+.sheet .two{display:flex;gap:8px}.sheet .two>*{flex:1}
+.sheet .btns{display:flex;gap:8px;margin-top:16px}
+.sheet .btns button{flex:1;padding:13px;border-radius:14px;font-weight:700;font-size:15px}
+.sheet .go{background:var(--accent);color:var(--accent-text)}.sheet .no{background:var(--card)}.sheet .del{background:var(--red-bg);color:var(--red);flex:0 0 auto;padding:13px 16px}
 .err{padding:30px 20px;text-align:center;color:var(--hint)}
 /* подсказки при первом входе */
 .coach{position:fixed;inset:0;z-index:50;display:none}
@@ -105,10 +123,13 @@ h2:first-child{margin-top:4px}
 <div class="save" id="save"><button class="no" id="cancel">Отмена</button><button class="ok" id="apply">Сохранить</button></div>
 <div class="tabs" id="tabs">
   <button data-t="home" id="tab-home"><i>🗓</i>Расписание</button>
+  <button data-t="tasks" id="tab-tasks" style="display:none"><i>📌</i>Задания</button>
   <button data-t="pick" id="tab-pick"><i>🎛</i>Мой выбор</button>
   <button data-t="notif" id="tab-notif"><i>🔔</i>Уведомления</button>
 </div>
 <div class="toast" id="toast"></div>
+<button class="fab" id="fab" style="display:none" aria-label="Добавить задание">+</button>
+<div class="sheet" id="sheet"><div class="in" id="sin"></div></div>
 <div class="coach" id="coach"><div class="spot" id="spot"></div><div class="box" id="cbox"></div></div>
 <script>
 (function(){
@@ -142,21 +163,29 @@ function demo(){
     sub:[["Анализ данных · 1-СН",1],["Введение в маркетинг",0],["Казахский (русский) язык 1",1],["Критическое мышление",1],["Макроэкономика",1],["Статистика",1]],
     kz:{o:{A1:["Нуртазина А.О."],A2:["Сагатова Ш.Б.","Садыр Г.А"],B1:["Курмангожаева Э.С","Батилеуова Г.А."],B2:["Бейсембиев Б.К"]},c:null},
     mi:{o:{"SMM и веб-аналитика":[],"Product Design":["поток 1","поток 2"],"Events Management":["поток 1","поток 2"],"Бухгалтер в бизнесе":[]},c:null},
-    nf:{"1h":true,"30m":true,"10m":true,start:true,brk:true,end:true,morning:true,mt:"06:00",cu:0}};
+    nf:{"1h":true,"30m":true,"10m":true,start:true,brk:true,end:true,morning:true,mt:"06:00",cu:0},
+    tk:[[1,"Сдать эссе по маркетингу",iso(1)+" 18:00",60,0],[2,"Подготовить презентацию по статистике",iso(3)+" 09:00",0,1],[3,"Прочитать главу 4",iso(6)+" 23:00",0,0]]};
 }
 
-let D, S, S0, tab = "home", selDay = 0, pickKz = false, coachI = -1;
+let D, S, S0, tab = "home", selDay = 0, pickKz = false, coachI = -1, API = "", sheetOpen = false;
+async function call(path, extra){
+  const r = await fetch(API + path, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(Object.assign({ initData: tg ? tg.initData : "" }, extra || {})) });
+  return r.json();
+}
 const clone = o => JSON.parse(JSON.stringify(o));
 
-function init(d){
-  D = d;
+function init(d, keep){
+  D = d; if (D.api) API = D.api;
+  $("#tab-tasks").style.display = D.tk ? "" : "none";
   S = { sub: D.sub.map(x => x[1]), kz: D.kz.c ? clone(D.kz.c) : null, mi: D.mi.c ? clone(D.mi.c) : null, nf: clone(D.nf) };
   S0 = clone(S);
   $("#sub").textContent = D.t || "";
   const today = (D.now||"").slice(0,10);
-  selDay = Math.max(0, D.days.findIndex(x => x[0] === today));
+  if (!keep) selDay = Math.max(0, D.days.findIndex(x => x[0] === today));
+  else selDay = Math.min(selDay, Math.max(0, D.days.length - 1));
   render();
-  if (!D.ob && !store.get("me_tour")) setTimeout(() => coach(0), 350);
+  if (!keep && !D.ob && !store.get("me_tour")) setTimeout(() => coach(0), 350);
 }
 
 const dirty = () => JSON.stringify(S) !== JSON.stringify(S0);
@@ -169,9 +198,10 @@ function render(){
   $$("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === tab));
   const app = $("#app"); app.innerHTML = "";
   const w = document.createElement("div"); w.className = "wrap"; app.appendChild(w);
-  (tab === "home" ? viewHome : tab === "pick" ? viewPick : viewNotif)(w);
+  (tab === "home" ? viewHome : tab === "tasks" ? viewTasks : tab === "pick" ? viewPick : viewNotif)(w);
   $("#save").classList.toggle("show", dirty());
-  if (tg && tg.BackButton) { try { (tab !== "home" || dirty()) ? tg.BackButton.show() : tg.BackButton.hide(); } catch(e){} }
+  $("#fab").style.display = (tab === "tasks" && D.tk) ? "block" : "none";
+  if (tg && tg.BackButton) { try { (tab !== "home" || dirty() || sheetOpen) ? tg.BackButton.show() : tg.BackButton.hide(); } catch(e){} }
 }
 
 /* ───── Расписание ───── */
@@ -238,6 +268,7 @@ function viewPick(w){
   const card = document.createElement("div"); card.className = "card";
   D.sub.forEach((x, i) => card.appendChild(rowSw(esc(x[0]), "", S.sub[i], v => { S.sub[i] = v; })));
   w.appendChild(card);
+  resetBlock(w);
 }
 
 function optEl(title, small, on, fn){
@@ -269,10 +300,100 @@ function viewNotif(w){
     ["06:00","07:00","07:30","08:00"].forEach(t => { const b = document.createElement("button"); b.className = "chip" + (n.mt === t ? " on" : ""); b.textContent = t; b.onclick = () => { n.mt = t; render(); haptic(); }; ch2.appendChild(b); });
     w.appendChild(ch2); }
   w.insertAdjacentHTML("beforeend", `<div class="card" style="margin-top:14px"><b>🔒 Это отключить нельзя</b><div class="hint" style="margin:4px 0 0">Сообщения о переносе или отмене пары приходят всегда, чтобы ты не пропустил(а) изменения.</div></div>`);
+  resetBlock(w);
+}
+
+/* ───── Задания ───── */
+const WD = ["вс","пн","вт","ср","чт","пт","сб"];
+const pad2 = n => String(n).padStart(2, "0");
+const nowD = () => new Date((D.now || "").replace(" ", "T") + ":00");
+function leftText(dt){
+  const ms = dt - nowD(), m = Math.round(ms / 60000);
+  if (m < 0) return ["просрочено", "h"];
+  if (m < 60) return ["через " + m + " мин", "h"];
+  if (m < 24 * 60) return ["через " + Math.floor(m / 60) + " ч", m < 360 ? "h" : "u"];
+  const d = Math.floor(m / 1440); return ["через " + d + " " + (d % 10 === 1 && d !== 11 ? "день" : (d % 10 >= 2 && d % 10 <= 4 && (d < 10 || d > 20)) ? "дня" : "дней"), d <= 2 ? "u" : ""];
+}
+function viewTasks(w){
+  const list = D.tk || [];
+  w.insertAdjacentHTML("beforeend", `<h2>📌 Мои задания</h2><div class="hint">Бот напомнит заранее: за сутки, за 6 часов и за час. Нажми ✓, когда сделал(а).</div>`);
+  if (!list.length) w.insertAdjacentHTML("beforeend", `<div class="empty">Заданий нет 🎉<br><small>Нажми «+», чтобы добавить</small></div>`);
+  list.forEach(t => {
+    const dt = new Date(t[2].replace(" ", "T") + ":00"); const [lt, cl] = leftText(dt);
+    const el = document.createElement("div"); el.className = "tk " + (cl === "h" ? "hot" : cl === "u" ? "soon" : "") + (lt === "просрочено" ? " late" : "");
+    el.innerHTML = `<button class="ck" aria-label="Сделано">✓</button><div class="b"><b>${esc(t[1])}</b>
+      <small>${WD[dt.getDay()]}, ${dt.getDate()} ${MN[dt.getMonth()]} · ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}</small>
+      <small class="${cl}">${lt}${t[3] ? " · напомню за " + remindName(t[3]) : ""}${t[4] ? " · 📎 файлы в чате" : ""}</small></div>`;
+    $(".ck", el).onclick = async ev => { ev.stopPropagation(); await taskCall({ op: "done", id: t[0] }, "Готово, задание убрано ✅"); };
+    el.onclick = () => openSheet(t);
+    w.appendChild(el);
+  });
+}
+const remindName = m => ({30:"30 мин",60:"час",180:"3 часа",1440:"сутки"}[m] || m + " мин");
+async function taskCall(data, okText){
+  try {
+    const j = await call("/api/me/task", { data });
+    if (j.ok) { init(j.data, true); haptic("ok"); toast(okText); return true; }
+    toast(j.err === "past" ? "Этот срок уже прошёл. Выбери время в будущем" : j.err === "limit" ? "Слишком много заданий. Отметь выполненные" : "Не получилось сохранить. Попробуй ещё раз");
+  } catch (e) { toast("Нет связи с сервером. Попробуй ещё раз"); }
+  return false;
+}
+let TS = null;
+function openSheet(t){
+  const n = nowD(); const tm = new Date(n.getTime() + 864e5);
+  const isoD = d => d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+  TS = t ? { id: t[0], task: t[1], date: t[2].slice(0, 10), time: t[2].slice(11, 16), cm: t[3] } : { id: 0, task: "", date: isoD(tm), time: "18:00", cm: 0 };
+  sheetOpen = true; $("#sheet").classList.add("show"); drawSheet(isoD); render();
+}
+function closeSheet(){ sheetOpen = false; TS = null; $("#sheet").classList.remove("show"); render(); }
+function drawSheet(isoD){
+  isoD = isoD || (d => d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()));
+  const n = nowD(), quick = [["Сегодня", 0], ["Завтра", 1], ["Послезавтра", 2]].map(([l, o]) => [l, isoD(new Date(n.getTime() + o * 864e5))]);
+  const el = $("#sin");
+  el.innerHTML = `<h3>${TS.id ? "Изменить задание" : "Новое задание"}</h3>
+    <label>Что нужно сделать</label><input type="text" id="ttl2" maxlength="200" placeholder="Например: сдать эссе по маркетингу" value="${esc(TS.task)}">
+    <label>Когда сдавать</label><div class="chips" id="qd"></div>
+    <div class="two"><input type="date" id="dd" value="${TS.date}"><input type="time" id="tt" value="${TS.time}"></div>
+    <label>Напомнить дополнительно</label><div class="chips" id="rm"></div>
+    <div class="btns">${TS.id ? '<button class="del" id="tdel">🗑</button>' : ""}<button class="no" id="tno">Отмена</button><button class="go" id="tgo">Сохранить</button></div>`;
+  const qd = $("#qd", el); quick.forEach(([l, v]) => { const b = document.createElement("button"); b.className = "chip" + (TS.date === v ? " on" : ""); b.textContent = l; b.onclick = () => { TS.task = $("#ttl2").value; TS.time = $("#tt").value; TS.date = v; drawSheet(isoD); }; qd.appendChild(b); });
+  const rm = $("#rm", el); [[0,"Нет"],[30,"30 мин"],[60,"1 час"],[180,"3 часа"],[1440,"Сутки"]].forEach(([v, l]) => { const b = document.createElement("button"); b.className = "chip" + (TS.cm === v ? " on" : ""); b.textContent = l; b.onclick = () => { TS.task = $("#ttl2").value; TS.date = $("#dd").value; TS.time = $("#tt").value; TS.cm = v; drawSheet(isoD); }; rm.appendChild(b); });
+  $("#tno").onclick = closeSheet;
+  if (TS.id) $("#tdel").onclick = async () => { if (await taskCall({ op: "done", id: TS.id }, "Задание удалено")) closeSheet(); };
+  $("#tgo").onclick = async () => {
+    const task = $("#ttl2").value.trim(), date = $("#dd").value, time = $("#tt").value;
+    if (!task) return toast("Напиши, что нужно сделать");
+    if (!date || !time) return toast("Выбери дату и время");
+    if (new Date(date + "T" + time + ":00") <= nowD()) return toast("Этот срок уже прошёл. Выбери время в будущем");
+    if (await taskCall({ op: TS.id ? "edit" : "add", id: TS.id, task, dt: date + "T" + time, cm: TS.cm }, TS.id ? "Изменения сохранены ✅" : "Задание добавлено ✅")) closeSheet();
+  };
+}
+$("#fab").onclick = () => openSheet(null);
+$("#sheet").onclick = ev => { if (ev.target.id === "sheet") closeSheet(); };
+
+/* ───── Сброс всего к начальным ───── */
+let askReset = false;
+function resetBlock(w){
+  const c = document.createElement("div"); c.className = "card"; c.style.marginTop = "22px";
+  if (!askReset) {
+    c.innerHTML = `<b>↩️ Вернуть всё как было</b><div class="hint" style="margin:4px 0 10px">Сбросит предметы, уровень казахского, майнор и уведомления к самым первым настройкам.</div><button class="mini" id="rs" style="padding:9px 14px;border-radius:10px;background:var(--red-bg);color:var(--red);font-weight:700">Сбросить всё…</button>`;
+    $("#rs", c).onclick = () => { askReset = true; render(); };
+  } else {
+    c.innerHTML = `<b>Точно сбросить всё?</b><div class="hint" style="margin:4px 0 10px">Твои выборы пропадут. Расписание группы не изменится.</div><div style="display:flex;gap:8px"><button id="rsn" style="flex:1;padding:11px;border-radius:12px;background:var(--line);font-weight:700">Нет, оставить</button><button id="rsy" style="flex:1;padding:11px;border-radius:12px;background:var(--red);color:#fff;font-weight:700">Да, сбросить</button></div>`;
+    $("#rsn", c).onclick = () => { askReset = false; render(); };
+    $("#rsy", c).onclick = () => { askReset = false; doReset(); };
+  }
+  w.appendChild(c);
+}
+async function doReset(){
+  S = clone(S0);
+  await sendOut({ k: "me", h: D.h, reset: 1, ob: 1 });
 }
 
 /* ───── Сохранить / отмена ───── */
-function apply(){
+let busy = false;
+async function apply(){
+  if (busy) return;
   const ch = changedKeys(), out = { k: "me", h: D.h };
   if (ch.sub) out.sub = S.sub.map((v, i) => v ? i : -1).filter(i => i >= 0);
   if (ch.kz) out.kz = S.kz || "";
@@ -280,15 +401,33 @@ function apply(){
   if (ch.nf) out.nf = S.nf;
   out.ob = 1; store.set("me_tour", "1");
   if (!dirty() && D.ob) return;
-  const payload = JSON.stringify(out);
+  await sendOut(out);
+}
+async function sendOut(out){
+  if (busy) return;
   haptic("ok");
+  // основной путь: сохраняем через сервер, окно остаётся открытым
+  if (D.api && tg && tg.initData) {
+    busy = true; const btn = $("#apply"); btn.textContent = "Сохраняю…";
+    try {
+      const j = await call("/api/me/save", { data: out });
+      if (j.ok) { init(j.data, true); haptic("ok"); toast(out.reset ? "Всё сброшено к начальным ↩️" : "Сохранено ✅ Расписание и уведомления обновлены"); busy = false; btn.textContent = "Сохранить"; return; }
+      if (j.err === "stale" || j.err === "profile") {
+        const g = await call("/api/me/get");
+        if (g.ok) { init(g.data, true); toast("Расписание обновилось. Проверь выбор и сохрани ещё раз"); busy = false; btn.textContent = "Сохранить"; return; }
+      }
+      throw new Error(j.err || "fail");
+    } catch (e) { busy = false; btn.textContent = "Сохранить"; if (!(tg && tg.sendData)) return toast("Не получилось сохранить. Попробуй ещё раз"); }
+  }
+  // запасной путь: через бота (окно Telegram при этом закроется)
+  const payload = JSON.stringify(out);
   if (tg && tg.sendData && tg.platform && tg.platform !== "unknown") tg.sendData(payload);
   else document.body.innerHTML = `<div class="err"><b>Демо-режим</b><br><br>Вне Telegram данные не отправляются.<br><small>${esc(payload)}</small></div>`;
 }
 function cancel(){ S = clone(S0); render(); toast("Изменения отменены"); }
 $("#apply").onclick = apply; $("#cancel").onclick = cancel;
 $$("#tabs button").forEach(b => b.onclick = () => go(b.dataset.t));
-if (tg && tg.BackButton) { try { tg.BackButton.onClick(() => { if (dirty()) cancel(); else if (tab !== "home") go("home"); else if (tg.close) tg.close(); }); } catch(e){} }
+if (tg && tg.BackButton) { try { tg.BackButton.onClick(() => { if (sheetOpen) closeSheet(); else if (dirty()) cancel(); else if (tab !== "home") go("home"); else if (tg.close) tg.close(); }); } catch(e){} }
 
 /* ───── Подсказки при первом входе ───── */
 const STEPS = [
@@ -298,6 +437,7 @@ const STEPS = [
   { sel: null, t: "💾 Как сохранить", p: "Когда что-то поменяешь, внизу появятся «Сохранить» и «Отмена». «Отмена» вернёт всё как было, а кнопка «Назад» в Telegram работает так же. Подсказки можно открыть снова кнопкой «?»." }
 ];
 function coach(i){
+  if (D.tk && !STEPS.some(x => x.sel === "#tab-tasks")) STEPS.splice(1, 0, { sel: "#tab-tasks", t: "📌 Задания", p: "Дедлайны и домашки в одном месте. «+» добавляет задание, ✓ убирает, а бот напомнит заранее." });
   coachI = i; const c = $("#coach"), box = $("#cbox"), spot = $("#spot");
   if (i >= STEPS.length) { c.classList.remove("show"); coachI = -1; store.set("me_tour", "1"); return; }
   const st = STEPS[i]; c.classList.add("show");
@@ -310,9 +450,14 @@ function coach(i){
 $("#help").onclick = () => coach(0);
 
 async function boot(){
-  const q = new URLSearchParams(location.search).get("d");
-  try { init(q ? await decode(q) : demo()); }
-  catch (e) { $("#app").innerHTML = `<div class="err"><b>Не удалось открыть окно</b><br><br>Закрой его и нажми кнопку в боте ещё раз (/me).</div>`; }
+  const sp = new URLSearchParams(location.search), q = sp.get("d"), apiP = sp.get("api");
+  try {
+    if (q) { const d = await decode(q); init(d); if (d.api && tg && tg.initData) call("/api/me/get").then(j => { if (j.ok && !dirty()) init(j.data, true); }).catch(() => {}); }
+    else if (apiP && tg && tg.initData) {
+      API = apiP; $("#app").innerHTML = `<div class="empty">Загружаю…</div>`;
+      const j = await call("/api/me/get"); if (!j.ok) throw new Error(j.err || "fail"); init(j.data);
+    } else init(demo());
+  } catch (e) { $("#app").innerHTML = `<div class="err"><b>Не удалось открыть окно</b><br><br>Закрой его и открой ещё раз. Если не помогло, напиши боту /me.</div>`; }
 }
 boot();
 })();
