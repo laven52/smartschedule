@@ -53,6 +53,26 @@ button{border:0;background:none;cursor:pointer}
 .dchip.drop{background:var(--accent);color:#fff;transform:scale(1.06)}
 .dchip.drop span{color:#ffe3e8}
 
+/* выбор недели */
+.wk{display:flex;align-items:center;gap:6px;padding:0 4px 8px}
+.wk .nav{width:40px;height:38px;border-radius:10px;background:var(--card);font-size:20px;font-weight:700;color:var(--text)}
+.wk .nav:disabled{opacity:.25}
+.wk .mid{flex:1;text-align:center;line-height:1.15;min-width:0}
+.wk .mid b{display:block;font-size:14px}
+.wk .mid span{display:block;font-size:12px;color:var(--hint)}
+.wk .plus{height:38px;padding:0 12px;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;font-size:14px;white-space:nowrap}
+.hd.past b,.hd.past span{opacity:.5}
+.blk.past{opacity:.5;cursor:default;filter:grayscale(.5)}
+.blk.nw{border-left-color:var(--ok);background:rgba(46,155,79,.2);cursor:pointer}
+.blk.ex{border-left-color:var(--ok)}
+.fld{width:100%;min-width:0;border:0;background:var(--card);border-radius:12px;padding:12px;font-size:16px;font-weight:600;color:var(--text);outline:none;-webkit-appearance:none;appearance:none;min-height:46px}
+.added{margin:12px 10px 120px;background:var(--card);border-radius:14px;padding:10px 12px}
+.added>b{display:block;margin-bottom:4px;font-size:14px}
+.added .ar{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.added .ar div{flex:1;min-width:0}
+.added .ar small{display:block;color:var(--hint);font-size:12.5px}
+.added .ar button{width:32px;height:32px;border-radius:16px;background:var(--line);flex:0 0 auto}
+.busy{opacity:.55;pointer-events:none}
 /* подсказка */
 .tip{margin:10px 10px 4px;background:var(--card);border-radius:14px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start;font-size:13.5px}
 .tip .s{flex:1}
@@ -183,7 +203,9 @@ async function decode(blob){
   return JSON.parse(await new Response(ds).text());
 }
 
-let D, items, view = "week", sel, editIdx = null, step = "grid", notify = true, comment = "", showTip = true, todayIso = "";
+let D, items, view = "week", sel, editIdx = null, editAdd = null, addOpen = false, adds = [], API = "", busy = false,
+    step = "grid", notify = true, comment = "", showTip = true, todayIso = "";
+const isPast = it => it.bd < todayIso;
 try { if (localStorage.getItem("ed_tip_seen")) showTip = false; } catch(e){}
 
 function demo(){
@@ -199,15 +221,40 @@ function init(D0){
   D = D0; todayIso = (D.now||"").slice(0,10);
   items = D.i.map((r,i) => ({
     i, bd:r[0], bs:r[1], be:r[2], subj:r[3], tag:r[4], room:r[5],
-    nd0:r[6], ns0:r[7], ne0:r[8], x0:!!r[9], n:r[10],
+    nd0:r[6], ns0:r[7], ne0:r[8], x0:!!r[9], n:r[10], e:r[11]||0,
     nd:r[6], ns:r[7], ne:r[8], x:!!r[9]
   }));
-  sel = D.d.find(d => items.some(it => it.nd === d)) || D.d[0];
+  sel = D.d.find(d => d >= todayIso && items.some(it => it.nd === d)) || D.d.find(d => items.some(it => it.nd === d)) || D.d[0];
   render(true);
+}
+
+async function api(path, extra){
+  const r = await fetch(API + path, {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify(Object.assign({initData: tg ? tg.initData : ""}, extra || {}))});
+  return r.json();
+}
+async function goWeek(o){
+  if (busy) return;
+  if (nAll()) return toast("Сначала примени или сбрось изменения");
+  busy = true; render();
+  try {
+    const r = await api("/api/ed/get", {o});
+    busy = false;
+    if (!r.ok) { toast(r.err || "Не получилось открыть неделю"); render(); return; }
+    adds = []; init(r.data);
+  } catch (e) { busy = false; toast("Нет связи с ботом. Проверь интернет."); render(); }
+}
+function weekLabel(){
+  const m = D.mon || D.d[0], a = dObj(m), b = dObj(addDays(m, 5));
+  const rng = `${a.getDate()}${a.getMonth() !== b.getMonth() ? " " + MN[a.getMonth()] : ""}–${b.getDate()} ${MN[b.getMonth()]}`;
+  const o = D.o || 0;
+  const t = o === 0 ? "Эта неделя" : o === 1 ? "Следующая неделя" : o === -1 ? "Прошлая неделя" : o > 1 ? `Через ${o} нед.` : `${-o} нед. назад`;
+  return [t, rng];
 }
 
 const changed = it => it.nd !== it.nd0 || it.ns !== it.ns0 || it.ne !== it.ne0 || it.x !== it.x0;
 const nChanged = () => items.filter(changed).length;
+const nAll = () => nChanged() + adds.length;
 const dur = it => toMin(it.ne) - toMin(it.ns);
 const origRange = it => `${dayLong(it.nd0)} ${it.ns0}–${it.ne0}`;
 const newRange = it => `${dayLong(it.nd)} ${it.ns}–${it.ne}`;
@@ -222,7 +269,7 @@ function render(first){
   const y = window.scrollY;
   const app = $("#app"); app.innerHTML = "";
   const cols = view === "week" ? D.d : [sel];
-  const n = nChanged();
+  const n = nAll();
 
   // верх
   const top = el("div","top"); top.id = "top";
@@ -236,11 +283,26 @@ function render(first){
   });
   r1.append(seg); top.append(r1);
 
+  const wk = el("div","wk");
+  const [wt, wr] = weekLabel();
+  if (API) {
+    const pv = el("button","nav","‹"); pv.disabled = busy || (D.o <= (D.lo ?? -4)); pv.onclick = () => goWeek(D.o - 1);
+    wk.append(pv);
+  }
+  wk.append(el("div","mid", `<b>${wt}</b><span>${wr}</span>`));
+  if (API) {
+    const nx = el("button","nav","›"); nx.disabled = busy || (D.o >= (D.hi ?? 8)); nx.onclick = () => goWeek(D.o + 1);
+    wk.append(nx);
+    if (D.o !== 0) { const tb = el("button","nav","⌂"); tb.title = "Эта неделя"; tb.disabled = busy; tb.onclick = () => goWeek(0); wk.append(tb); }
+  }
+  const pl = el("button","plus","＋ Пара"); pl.onclick = () => { addOpen = true; render(); };
+  wk.append(pl); top.append(wk);
+
   if (view === "week") {
     const heads = el("div","heads"); heads.append(el("div"));
     const hc = el("div","cols"); hc.style.gridTemplateColumns = `repeat(${cols.length},1fr)`;
     cols.forEach(d => {
-      const c = el("div","hd" + (d===todayIso?" today":""), `<b>${dayShort(d).toUpperCase()}</b><span>${dObj(d).getDate()} ${MN[dObj(d).getMonth()]}</span>`);
+      const c = el("div","hd" + (d===todayIso?" today":"") + (d<todayIso?" past":""), `<b>${dayShort(d).toUpperCase()}</b><span>${dObj(d).getDate()} ${MN[dObj(d).getMonth()]}</span>`);
       c.dataset.day = d; c.onclick = () => { sel = d; view = "day"; render(); };
       hc.append(c);
     });
@@ -280,7 +342,7 @@ function render(first){
       const o = el("div","orig", "было"); o.style.top = ((toMin(it.bs)-GS)*PXM) + "px"; o.style.height = Math.max(16,(toMin(it.be)-toMin(it.bs))*PXM) + "px";
       o.style.left = "1px"; o.style.right = "1px"; col.append(o);
     });
-    layout(list).forEach(({it, lane, lanes}) => col.append(block(it, lane, lanes, cols.length > 1)));
+    layout(list.concat(adds.filter(a => a.nd === d))).forEach(({it, lane, lanes}) => col.append(block(it, lane, lanes, cols.length > 1)));
     cw.append(col);
   });
   g.append(cw); app.append(g);
@@ -296,23 +358,36 @@ function render(first){
     app.append(box);
   }
 
+  if (adds.length) {
+    const box = el("div","added","<b>➕ Новые пары (ещё не отправлены)</b>");
+    adds.forEach(a => {
+      const r = el("div","ar", `<div>${esc(a.subj)}<small>${dayLong(a.nd)} · ${a.ns}–${a.ne}${a.room ? " · ауд. " + esc(a.room) : ""}</small></div>`);
+      const x = el("button",null,"✕"); x.onclick = () => { adds = adds.filter(z => z !== a); render(); };
+      r.append(x); box.append(r);
+    });
+    app.append(box);
+  }
+
   // нижняя панель
   const bar = el("div","bar");
   bar.append(el("div","cnt", n ? `Изменено пар: <b>${n}</b>` : "Пока без изменений"));
   const bt = el("div","btns");
   const rs = el("button","b-reset","Сбросить всё"); rs.disabled = !n;
-  rs.onclick = () => { items.forEach(resetItem); haptic("light"); render(); };
+  rs.onclick = () => { items.forEach(resetItem); adds = []; haptic("light"); render(); };
   const mn = el("button","b-main", n ? "Проверить и отправить ›" : "Нет изменений"); mn.disabled = !n;
   mn.onclick = () => { step = "preview"; render(); window.scrollTo(0,0); };
   bt.append(rs, mn); bar.append(bt); app.append(bar);
 
   if (editIdx != null) app.append(...sheet(items[editIdx]));
+  if (editAdd) app.append(...sheet(editAdd));
+  if (addOpen) app.append(...addSheet());
   if (step === "preview") app.append(preview());
+  if (busy) app.classList.add("busy"); else app.classList.remove("busy");
 
   if (first) { const f = items.filter(it => cols.includes(it.nd)).map(it => toMin(it.ns)); const m = f.length ? Math.min(...f) : 8*60;
     window.scrollTo(0, Math.max(0, (m-GS)*PXM - 40 + (showTip ? 140 : 40))); }
   else window.scrollTo(0, y);
-  if (tg && tg.BackButton) { try { (editIdx != null || step === "preview") ? tg.BackButton.show() : tg.BackButton.hide(); } catch(e){} }
+  if (tg && tg.BackButton) { try { (editIdx != null || editAdd || addOpen || step === "preview") ? tg.BackButton.show() : tg.BackButton.hide(); } catch(e){} }
 }
 
 function resetItem(it){ it.nd = it.nd0; it.ns = it.ns0; it.ne = it.ne0; it.x = it.x0; }
@@ -333,24 +408,25 @@ function layout(list){
 }
 
 function block(it, lane, lanes, small){
-  const b = el("div","blk noselect" + (changed(it) ? " chg":"") + (it.x ? " off":"") + (small ? " sm":" lg"));
+  const b = el("div","blk noselect" + (it.nw ? " nw" : changed(it) ? " chg":"") + (it.x ? " off":"") + (it.e ? " ex":"") + (!it.nw && isPast(it) ? " past":"") + (small ? " sm":" lg"));
   b.dataset.i = it.i;
   const top = (toMin(it.ns)-GS)*PXM, h = Math.max(22,(toMin(it.ne)-toMin(it.ns))*PXM - 2);
   b.style.top = top + "px"; b.style.height = h + "px";
   b.style.left = `calc(${lane*100/lanes}% + 1px)`; b.style.width = `calc(${100/lanes}% - 2px)`;
-  const warn = !it.x && overlapsOther(it) ? "⚠️ " : "";
-  if (small) b.innerHTML = `<b>${warn}${it.ns}</b><span>${esc(it.subj)}</span>`;
-  else b.innerHTML = `<b>${warn}${it.ns}–${it.ne}${it.x ? " · отменена" : ""}</b><span>${esc(it.subj)}</span>` +
+  const warn = !it.x && !it.nw && overlapsOther(it) ? "⚠️ " : "";
+  const plus = it.nw ? "➕ " : "";
+  if (small) b.innerHTML = `<b>${warn}${plus}${it.ns}</b><span>${esc(it.subj)}</span>`;
+  else b.innerHTML = `<b>${warn}${plus}${it.ns}–${it.ne}${it.x ? " · отменена" : ""}</b><span>${esc(it.subj)}</span>` +
       `<small>${[it.tag, it.room ? "ауд. " + esc(it.room) : ""].filter(Boolean).join(" · ")}</small>`;
   b.addEventListener("pointerdown", e => onDown(e, it, b));
-  b.addEventListener("click", () => { if (suppressClick) return; editIdx = it.i; render(); });
+  b.addEventListener("click", () => { if (suppressClick) return; if (it.nw) editAdd = it; else editIdx = it.i; render(); });
   return b;
 }
 
 /* ───────── перетаскивание ───────── */
 let drag = null, suppressClick = false, rafId = 0, lastEv = null;
 function onDown(e, it, b){
-  if (e.button > 0 || it.x) return;
+  if (e.button > 0 || it.x || it.nw || isPast(it)) return;
   const touch = e.pointerType !== "mouse";
   const st = {it, b, sx:e.clientX, sy:e.clientY, pid:e.pointerId, touch, on:false, timer:null};
   if (touch) st.timer = setTimeout(() => { if (drag === st) startDrag(st); }, 230);
@@ -402,10 +478,13 @@ function moveDrag(e){
   const chip = hover && hover.closest(".dchip,.hd");
   const cols = $$(".col");
   let col = null;
+  d.bad = false;
+  if (chip && chip.dataset.day && chip.dataset.day < todayIso) { d.bad = true; d.tday = d.it.nd; d.tmin = toMin(d.it.ns); d.ghost.innerHTML = `<b>Нельзя в прошлое</b>`; return; }
   if (chip && chip.dataset.day && view === "day") { chip.classList.add("drop"); d.tday = chip.dataset.day; d.label = "→ " + dayLong(d.tday); d.ghost.innerHTML = `<b>${dayLong(d.tday)}</b><br>${esc(d.it.subj)}`; return; }
   let best = 1e9;
   cols.forEach(c => { const r = c.getBoundingClientRect(); const dx = e.clientX < r.left ? r.left - e.clientX : e.clientX > r.right ? e.clientX - r.right : 0; if (dx < best) { best = dx; col = c; } });
   if (!col) return;
+  if (col.dataset.day < todayIso) { d.bad = true; d.tday = d.it.nd; d.tmin = toMin(d.it.ns); d.ghost.innerHTML = `<b>Нельзя в прошлое</b>`; return; }
   const r = col.getBoundingClientRect();
   let m = GS + (e.clientY - d.grabY - r.top)/PXM; m = snap(m, 10);
   m = Math.max(GS, Math.min(GE - d.dur, m));
@@ -423,6 +502,7 @@ function endDrag(d, cancel){
   d.b.classList.remove("dragging");
   setTimeout(() => suppressClick = false, 350);
   if (cancel) return;
+  if (d.bad) { toast("Прошедшие дни менять нельзя"); return; }
   const it = d.it, was = newRange(it);
   it.nd = d.tday; it.ns = hm(d.tmin); it.ne = hm(d.tmin + d.dur);
   if (view === "day") sel = it.nd;
@@ -437,9 +517,18 @@ function sheet(it){
   const sh = el("div","sheet");
   sh.append(el("div","grab"));
   sh.append(el("div","sh-t", esc(it.subj)));
+  if (it.nw) {
+    sh.append(el("div","sh-s", `Новая пара · ${dayLong(it.nd)} ${it.ns}–${it.ne}${it.room ? " · ауд. " + esc(it.room) : ""}`));
+    const act = el("div","act");
+    const rm = el("button","red","🗑 Убрать из списка"); rm.onclick = () => { adds = adds.filter(z => z !== it); closeSheet(); };
+    const dn = el("button","done","Готово"); dn.onclick = closeSheet; act.append(rm, dn); sh.append(act);
+    return [shade, sh];
+  }
   sh.append(el("div","sh-s", [it.tag, it.room ? "ауд. " + esc(it.room) : "", "по расписанию: " + origRange(it)].filter(Boolean).join(" · ")));
 
-  if (!it.x) {
+  if (isPast(it)) {
+    sh.append(el("div","warn","🕘 Эта пара уже прошла — прошлое менять нельзя." + (it.x0 ? " Она была отменена." : "")));
+  } else if (!it.x) {
     sh.append(el("div","lab","Время пары"));
     const tm = el("div","tm");
     const l1 = el("label",null,`<small>Начало</small>`); const i1 = el("input"); i1.type = "time"; i1.value = it.ns; l1.append(i1);
@@ -460,7 +549,7 @@ function sheet(it){
 
     sh.append(el("div","lab","День"));
     const days = el("div","days");
-    D.d.forEach(d => { const b = el("button", d === it.nd ? "cur":"", dayLong(d)); b.onclick = () => { it.nd = d; if (view==="day") sel = d; haptic("light"); render(); }; days.append(b); });
+    D.d.filter(d => d >= todayIso).forEach(d => { const b = el("button", d === it.nd ? "cur":"", dayLong(d)); b.onclick = () => { it.nd = d; if (view==="day") sel = d; haptic("light"); render(); }; days.append(b); });
     sh.append(days);
 
     sh.append(el("div","lab","Или другая дата"));
@@ -486,7 +575,8 @@ function sheet(it){
   }
 
   const act = el("div","act");
-  if (!it.x) { const c = el("button","red","🚫 Отменить пару"); c.onclick = () => { it.x = true; it.nd = it.nd0; it.ns = it.ns0; it.ne = it.ne0; haptic("medium"); editIdx = null; render(); }; act.append(c); }
+  if (isPast(it)) { const dn0 = el("button","done","Закрыть"); dn0.onclick = closeSheet; act.append(dn0); sh.append(act); return [shade, sh]; }
+  if (!it.x) { const c = el("button","red", it.e ? "🗑 Удалить пару" : "🚫 Отменить пару"); c.onclick = () => { it.x = true; it.nd = it.nd0; it.ns = it.ns0; it.ne = it.ne0; haptic("medium"); editIdx = null; render(); }; act.append(c); }
   if (changed(it)) { const r = el("button",null,"↩️ Вернуть как было"); r.onclick = () => { resetItem(it); haptic("light"); render(); }; act.append(r); }
   else if (it.x0) { const r = el("button",null,"↩️ Вернуть пару в расписание"); r.onclick = () => { it.x = false; haptic("light"); render(); }; act.append(r); }
   const dn = el("button","done","Готово"); dn.onclick = closeSheet; act.append(dn);
@@ -494,11 +584,55 @@ function sheet(it){
   return [shade, sh];
 }
 function bad(m){ toast(m || "Время вне допустимого диапазона"); render(); }
-function closeSheet(){ editIdx = null; render(); }
+function closeSheet(){ editIdx = null; editAdd = null; addOpen = false; render(); }
+
+/* ───────── добавление пары ───────── */
+function addSheet(){
+  const shade = el("div","shade"); shade.onclick = closeSheet;
+  const sh = el("div","sheet");
+  sh.append(el("div","grab"), el("div","sh-t","➕ Добавить пару"),
+    el("div","sh-s","Например, замена отменённой пары. Студенты группы получат уведомление."));
+  sh.append(el("div","lab","Название"));
+  const name = el("input","fld"); name.type = "text"; name.maxLength = 60; name.placeholder = "Например: Статистика (замена)"; sh.append(name);
+  sh.append(el("div","lab","Дата"));
+  const dt = el("input","fld"); dt.type = "date"; dt.min = todayIso; if (D.mx) dt.max = D.mx;
+  dt.value = D.d.find(d => dateOk(d)) || (dateOk(todayIso) ? todayIso : "");
+  sh.append(dt);
+  sh.append(el("div","lab","Время"));
+  const tm = el("div","tm");
+  const l1 = el("label",null,"<small>Начало</small>"), i1 = el("input"); i1.type = "time"; i1.value = "09:00"; l1.append(i1);
+  const l2 = el("label",null,"<small>Конец</small>"), i2 = el("input"); i2.type = "time"; i2.value = "10:30"; l2.append(i2);
+  tm.append(l1, l2); sh.append(tm);
+  sh.append(el("div","lab","Кабинет (необязательно)"));
+  const room = el("input","fld"); room.type = "text"; room.maxLength = 20; room.placeholder = "Например: 305"; sh.append(room);
+  const warn = el("div","warn"); sh.append(warn);
+  const chk = () => {
+    const a = toMin(i1.value), b = toMin(i2.value), d = dt.value;
+    const clash = d && a >= 0 && b > a && items.concat(adds).some(o => !o.x && o.nd === d && toMin(o.ns) < b && a < toMin(o.ne));
+    warn.textContent = clash ? "⚠️ В это время у группы уже есть другая пара — она останется, обе будут в расписании." : "";
+  };
+  [dt, i1, i2].forEach(x => x.onchange = chk);
+  const act = el("div","act");
+  const ok = el("button","done","Добавить в список");
+  ok.onclick = () => {
+    const nm = name.value.replace(/\s+/g," ").trim(), d = dt.value, a = toMin(i1.value), b = toMin(i2.value);
+    if (nm.length < 2) return toast("Напиши название пары");
+    if (!d || !dateOk(d)) return toast(dObj(d||todayIso).getDay() === 0 ? "В воскресенье занятий нет" : "Выбери дату от сегодня (не воскресенье, не каникулы)");
+    if (a < GS || b <= a || b > 23*60+59 || b - a > 8*60) return toast("Проверь время: начало не раньше 07:00, конец позже начала");
+    adds.push({i:-1-adds.length, nw:true, bd:d, nd:d, ns:hm(a), ne:hm(b), nd0:d, ns0:hm(a), ne0:hm(b), x:false, x0:false,
+               subj:nm, tag:"", room:room.value.trim().slice(0,20), n:D.n});
+    addOpen = false; haptic("ok"); toast("Пара добавлена в список. Нажми «Проверить и отправить»."); render();
+  };
+  const cn = el("button",null,"Отмена"); cn.onclick = closeSheet;
+  act.append(ok, cn); sh.append(act);
+  chk();
+  return [shade, sh];
+}
 
 /* ───────── предпросмотр ───────── */
 function messageHtml(){
-  const parts = items.filter(changed).map(it => {
+  const addParts = adds.map(a => `<div class="it">➕ <b>${esc(a.subj)}</b><br><i>добавлена пара</i> · ${dayLong(a.nd)} ${a.ns}–${a.ne}${a.room ? "<br>📍 ауд. " + esc(a.room) : ""}</div>`).join("");
+  const parts = addParts + items.filter(changed).map(it => {
     if (it.x) return `<div class="it">🚫 <b>${esc(it.subj)}</b><br><i>отменена</i> · ${origRange(it)}</div>`;
     if (it.x0) return `<div class="it">↩️ <b>${esc(it.subj)}</b><br><i>снова в силе</i> · ${newRange(it)}</div>`;
     return `<div class="it">🔁 <b>${esc(it.subj)}</b><br>было: ${origRange(it)}<br><b>стало: ${newRange(it)}</b></div>`;
@@ -510,7 +644,7 @@ function preview(){
   const p = el("div","prev");
   const back = el("button",null,"‹ Назад к расписанию"); back.style.cssText = "color:var(--accent);font-weight:600;padding:4px 0 10px"; back.onclick = () => { step = "grid"; render(); };
   p.append(back, el("h2",null,"Проверь, что получат студенты"));
-  const aff = Math.max(0, ...items.filter(changed).map(it => it.n));
+  const aff = Math.max(0, ...items.filter(changed).map(it => it.n), ...adds.map(a => a.n));
   p.append(el("div","sub", `Получат: до <b>${aff}</b> из ${D.n} студентов группы. Каждый — одно сообщение. Тем, кого пары не касаются, ничего не придёт.`));
   const wrap = el("div","bubwrap"); const bub = el("div","bub"); bub.id = "bub"; bub.innerHTML = messageHtml(); wrap.append(bub); p.append(wrap);
   p.append(el("div","lab","Комментарий для студентов (необязательно)"));
@@ -525,20 +659,47 @@ function preview(){
   return p;
 }
 
-function apply(nt){
+async function apply(nt){
   const ops = items.filter(changed).map(it => [it.i, it.nd, it.ns, it.x ? 1 : 0, it.ne]);
-  if (!ops.length) return;
-  const payload = JSON.stringify({w: D.o, h: D.h, nt: nt ? 1 : 0, c: comment.trim().slice(0,200), o: ops});
+  const aa = adds.map(a => [a.nd, a.ns, a.ne, a.subj, a.room]);
+  if (!ops.length && !aa.length) return;
+  const data = {w: D.o, h: D.h, nt: nt ? 1 : 0, c: comment.trim().slice(0,200), o: ops};
+  if (aa.length) data.a = aa;
+  if (API) {
+    if (busy) return;
+    busy = true; render(); toast("Отправляю…");
+    try {
+      const r = await api("/api/ed/apply", {data});
+      busy = false;
+      if (r.ok) {
+        adds = []; comment = ""; step = "grid";
+        if (r.stale) toast(r.msg || "Расписание изменилось — обновил, проверь ещё раз");
+        else { haptic("ok"); toast(`Готово: изменено ${r.done}` + (nt ? `, отправлено студентам: ${r.sent}` : "")); }
+        init(r.data);
+      } else { toast(r.err || "Не получилось применить"); render(); }
+    } catch (e) { busy = false; toast("Нет связи с ботом. Ничего не применено."); render(); }
+    return;
+  }
+  const payload = JSON.stringify(data);
   if (new TextEncoder().encode(payload).length > 3900) return toast("Слишком много изменений сразу. Примени часть, потом остальное.");
   haptic("ok");
   if (tg && tg.sendData && tg.platform && tg.platform !== "unknown") { tg.sendData(payload); }
   else { document.body.innerHTML = `<div class="err"><b>Демо-режим</b><br><br>Вне Telegram данные не отправляются.<br><small>${esc(payload)}</small></div>`; }
 }
 
-if (tg && tg.BackButton) { try { tg.BackButton.onClick(() => { if (editIdx != null) closeSheet(); else if (step === "preview") { step = "grid"; render(); } }); } catch(e){} }
+if (tg && tg.BackButton) { try { tg.BackButton.onClick(() => { if (editIdx != null || editAdd || addOpen) closeSheet(); else if (step === "preview") { step = "grid"; render(); } }); } catch(e){} }
 
 async function boot(){
-  const q = new URLSearchParams(location.search).get("d");
+  const sp = new URLSearchParams(location.search), q = sp.get("d"), apiP = sp.get("api");
+  if (apiP) {
+    API = apiP; $("#app").innerHTML = `<div class="empty">Загружаю…</div>`;
+    try {
+      const r = await api("/api/ed/get", {o: 0});
+      if (!r.ok) { $("#app").innerHTML = `<div class="err"><b>${esc(r.err || "Не удалось открыть редактор")}</b></div>`; return; }
+      init(r.data);
+    } catch (e) { $("#app").innerHTML = `<div class="err"><b>Нет связи с ботом</b><br><br>Закрой окно и открой редактор ещё раз.</div>`; }
+    return;
+  }
   try { init(q ? await decode(q) : demo()); }
   catch (e) { $("#app").innerHTML = `<div class="err"><b>Не удалось открыть редактор</b><br><br>Закрой окно и нажми кнопку редактора в боте ещё раз.</div>`; }
 }
