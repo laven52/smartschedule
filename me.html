@@ -293,6 +293,19 @@ function rowSw(label, small, on, set){
 }
 
 /* ───── Уведомления ───── */
+function timeChips(w, key, presets, lo, hi, n){
+  const ch = document.createElement("div"); ch.className = "chips";
+  presets.forEach(t => { const b = document.createElement("button"); b.className = "chip" + (n[key] === t ? " on" : ""); b.textContent = t;
+    b.onclick = () => { n[key] = t; render(); haptic(); }; ch.appendChild(b); });
+  w.appendChild(ch);
+  const row = document.createElement("div"); row.className = "row"; row.style.marginTop = "8px";
+  const custom = !presets.includes(n[key]);
+  row.innerHTML = `<div class="l">Своё время${custom ? `<small>выбрано: ${esc(n[key])}</small>` : `<small>с ${lo} до ${hi}</small>`}</div>`;
+  const inp = document.createElement("input"); inp.type = "time"; inp.value = n[key] || ""; inp.min = lo; inp.max = hi;
+  inp.style.cssText = "font:inherit;font-size:17px;padding:8px 10px;border-radius:10px;border:1px solid var(--line,#ccc);background:var(--card,#fff);color:inherit";
+  inp.onchange = () => { const v = inp.value; if (!v) return; if (v < lo || v > hi) { toast(`Выбери время с ${lo} до ${hi}`); inp.value = n[key]; return; } n[key] = v; render(); haptic(); };
+  row.appendChild(inp); w.appendChild(row);
+}
 function viewNotif(w){
   const n = S.nf;
   w.insertAdjacentHTML("beforeend", `<h2>Перед парой</h2><div class="hint">Базовые напоминания включены у всех. Здесь можно убрать лишнее.</div>`);
@@ -305,13 +318,19 @@ function viewNotif(w){
   [[0,"Нет"],[5,"5 мин"],[15,"15 мин"],[20,"20 мин"],[45,"45 мин"],[90,"1,5 часа"]].forEach(([v, l]) => { const b = document.createElement("button");
     b.className = "chip" + (n.cu === v ? " on" : ""); b.textContent = l; b.onclick = () => { n.cu = v; render(); haptic(); }; ch.appendChild(b); });
   w.appendChild(ch);
+  const rm = document.createElement("div"); rm.className = "row"; rm.style.marginTop = "8px";
+  const cuCustom = ![0,5,15,20,45,90].includes(n.cu);
+  rm.innerHTML = `<div class="l">Своё число минут${cuCustom ? `<small>выбрано: за ${n.cu} мин</small>` : `<small>от 1 до 240</small>`}</div>`;
+  const mi = document.createElement("input"); mi.type = "number"; mi.min = 1; mi.max = 240; mi.inputMode = "numeric"; mi.value = cuCustom ? n.cu : ""; mi.placeholder = "мин";
+  mi.style.cssText = "width:90px;font:inherit;font-size:17px;padding:8px 10px;border-radius:10px;border:1px solid var(--line,#ccc);background:var(--card,#fff);color:inherit;text-align:center";
+  mi.onchange = () => { const v = parseInt(mi.value, 10); if (!(v >= 1 && v <= 240)) { toast("От 1 до 240 минут"); mi.value = cuCustom ? n.cu : ""; return; } n.cu = v; render(); haptic(); };
+  rm.appendChild(mi); w.appendChild(rm);
   w.insertAdjacentHTML("beforeend", `<h2>Утренняя сводка</h2><div class="hint">Одно сообщение утром: какие сегодня пары.</div>`);
   const c2 = document.createElement("div"); c2.className = "card"; c2.appendChild(rowSw("Присылать сводку", "", n.morning ? 1 : 0, v => { n.morning = !!v; render(); })); w.appendChild(c2);
-  if (n.morning) { const ch2 = document.createElement("div"); ch2.className = "chips";
-    ["06:00","07:00","07:30","08:00"].forEach(t => { const b = document.createElement("button"); b.className = "chip" + (n.mt === t ? " on" : ""); b.textContent = t; b.onclick = () => { n.mt = t; render(); haptic(); }; ch2.appendChild(b); });
-    w.appendChild(ch2); }
-  if (D.hw) { w.insertAdjacentHTML("beforeend", `<h2>Домашка</h2><div class="hint">В 19:00 бот пришлёт список, если на завтра есть несделанное. Если ничего срочного, сообщения не будет.</div>`);
-    const c3 = document.createElement("div"); c3.className = "card"; c3.appendChild(rowSw("Вечерний список домашки", "", n.hw !== false ? 1 : 0, v => { n.hw = !!v; })); w.appendChild(c3); }
+  if (n.morning) timeChips(w, "mt", ["06:00","07:00","07:30","08:00"], "05:00", "12:00", n);
+  if (D.hw) { w.insertAdjacentHTML("beforeend", `<h2>Домашка</h2><div class="hint">В выбранное время бот пришлёт список, если на завтра есть несделанное. Если ничего срочного, сообщения не будет.</div>`);
+    const c3 = document.createElement("div"); c3.className = "card"; c3.appendChild(rowSw("Список домашки", "", n.hw !== false ? 1 : 0, v => { n.hw = !!v; render(); })); w.appendChild(c3);
+    if (n.hw !== false) { if (!n.ht) n.ht = "19:00"; timeChips(w, "ht", ["08:00","17:00","19:00","21:00"], "06:00", "23:30", n); } }
   w.insertAdjacentHTML("beforeend", `<div class="card" style="margin-top:14px"><b>🔒 Это отключить нельзя</b><div class="hint" style="margin:4px 0 0">Сообщения о переносе или отмене пары приходят всегда, чтобы ты не пропустил(а) изменения.</div></div>`);
   resetBlock(w);
 }
