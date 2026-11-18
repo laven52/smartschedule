@@ -417,7 +417,7 @@ async function hwCall(data, okText){
   try {
     const j = await call("/api/me/hw", { data });
     if (j.ok) { init(j.data, true); haptic("ok"); toast(okText); return true; }
-    toast(j.err === "limit" ? "Слишком много несделанного. Отметь выполненное" : j.err === "bad" ? "Проверь текст и срок" : "Не получилось сохранить. Попробуй ещё раз");
+    toast(j.err === "limit" ? "Слишком много несделанного. Отметь выполненное" : j.err === "limit_g" ? "Слишком много записей для группы за сутки" : j.err === "forbidden" ? "Это может только староста" : j.err === "bad" ? "Проверь текст и срок" : "Не получилось сохранить. Попробуй ещё раз");
   } catch (e) { toast("Нет связи с сервером. Попробуй ещё раз"); }
   return false;
 }
@@ -425,7 +425,7 @@ function hwCard(h, done){
   const el = document.createElement("div"); const late = !done && h[2] && h[2] < (D.now || "").slice(0, 10);
   el.className = "tk" + (done ? " dn" : late ? " hot" : ""); 
   el.innerHTML = `<button class="ck" aria-label="${done ? "Вернуть" : "Сделано"}">${done ? "↩" : "✓"}</button><div class="b"><b>${esc(h[3])}</b>
-    <small>${h[1] ? esc(h[1]) + " · " : ""}${dueTxt(h[2])}</small></div>`;
+    <small>${h[1] ? esc(h[1]) + " · " : ""}${dueTxt(h[2])}</small>${h[5] ? `<small>📢 от ${esc(h[5])}</small>` : ""}</div>`;
   $(".ck", el).onclick = async ev => { ev.stopPropagation(); await hwCall({ op: done ? "undone" : "done", id: h[0] }, done ? "Вернул в список" : "Готово ✅"); };
   el.onclick = () => openHw(h);
   return el;
@@ -446,7 +446,7 @@ function viewHw(w){
   }
 }
 function openHw(h, subj, due){
-  HS = h ? { id: h[0], subject: h[1], text: h[3], due: h[2] } : { id: 0, subject: subj || "", text: "", due: due || "" };
+  HS = h ? { id: h[0], subject: h[1], text: h[3], due: h[2], gid: h[6] || 0, own: !!h[7], by: h[5] || "" } : { id: 0, subject: subj || "", text: "", due: due || "", gid: 0, own: false, by: "", grp: false, nt: true };
   sheetOpen = true; $("#sheet").classList.add("show"); drawHw(); render();
 }
 function drawHw(){
@@ -457,6 +457,8 @@ function drawHw(){
     <label>Предмет</label><input type="text" id="hs" list="hsl" maxlength="60" placeholder="Выбери или впиши" value="${esc(HS.subject)}"><datalist id="hsl">${names.map(n => `<option value="${esc(n)}">`).join("")}</datalist>
     <label>Что задано</label><input type="text" id="ht" maxlength="300" placeholder="Например: упражнения 4–7, подготовить вопросы" value="${esc(HS.text)}">
     <label>Срок</label><div class="chips" id="hq"></div><input type="date" id="hd" value="${HS.due}">
+    ${!HS.id && D.hwg ? `<label>Кому</label><div class="chips" id="hw_who"></div>${HS.grp ? '<div class="chips" id="hw_nt"></div>' : ""}` : ""}
+    ${HS.gid ? `<div class="hint" style="margin:8px 0 0">📢 ${HS.own ? "Ты записал(а) это для всей группы: правка и удаление сразу у всех." : "Записал(а) " + esc(HS.by) + ". Правка и удаление — только у тебя."}</div>` : ""}
     <div class="btns">${HS.id ? '<button class="del" id="hdel">🗑</button>' : ""}<button class="no" id="hno">Отмена</button><button class="go" id="hgo">Сохранить</button></div>`;
   const t = (D.now || "").slice(0, 10), iso = o => new Date(dObj(t).getTime() + o * 864e5).toISOString().slice(0, 10);
   const nx = HS.subject ? nextDateFor(HS.subject, t) : "";
@@ -464,11 +466,20 @@ function drawHw(){
   const grab = () => { HS.subject = $("#hs").value; HS.text = $("#ht").value; HS.due = $("#hd").value; };
   quick.forEach(([l, v]) => { const b = document.createElement("button"); b.className = "chip" + (HS.due === v ? " on" : ""); b.textContent = l;
     b.onclick = () => { grab(); HS.due = v; drawHw(); }; $("#hq", el).appendChild(b); });
+  if ($("#hw_who")) { [["👤 Только мне", false], ["📢 Всей группе", true]].forEach(([l, v]) => { const b = document.createElement("button"); b.className = "chip" + (HS.grp === v ? " on" : ""); b.textContent = l;
+      b.onclick = () => { grab(); HS.grp = v; drawHw(); }; $("#hw_who", el).appendChild(b); });
+    if ($("#hw_nt")) [["🔔 Уведомить группу", true], ["🔕 Без уведомления", false]].forEach(([l, v]) => { const b = document.createElement("button"); b.className = "chip" + (HS.nt === v ? " on" : ""); b.textContent = l;
+      b.onclick = () => { grab(); HS.nt = v; drawHw(); }; $("#hw_nt", el).appendChild(b); }); }
   $("#hno").onclick = closeSheet;
-  if (HS.id) $("#hdel").onclick = async () => { if (await hwCall({ op: "del", id: HS.id }, "Удалено")) closeSheet(); };
+  if (HS.id) $("#hdel").onclick = async () => {
+    if (HS.gid && HS.own) { if (await hwCall({ op: "gdel", gid: HS.gid }, "Удалено у всей группы")) closeSheet(); return; }
+    if (await hwCall({ op: "del", id: HS.id }, "Удалено")) closeSheet(); };
   $("#hgo").onclick = async () => {
     grab(); if (!HS.text.trim()) return toast("Напиши, что задано");
-    if (await hwCall({ op: HS.id ? "edit" : "add", id: HS.id, subject: HS.subject.trim(), text: HS.text.trim(), due: HS.due }, HS.id ? "Изменения сохранены ✅" : "Записано ✅")) closeSheet();
+    const p = { subject: HS.subject.trim(), text: HS.text.trim(), due: HS.due };
+    const data = HS.id ? (HS.gid && HS.own ? Object.assign({ op: "gedit", gid: HS.gid }, p) : Object.assign({ op: "edit", id: HS.id }, p))
+                       : (HS.grp ? Object.assign({ op: "gadd", nt: HS.nt }, p) : Object.assign({ op: "add" }, p));
+    if (await hwCall(data, HS.id ? "Изменения сохранены ✅" : HS.grp ? "Записано для группы ✅" : "Записано ✅")) closeSheet();
   };
 }
 
