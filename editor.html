@@ -220,7 +220,7 @@ function demo(){
 function init(D0){
   D = D0; todayIso = (D.now||"").slice(0,10);
   items = D.i.map((r,i) => ({
-    i, bd:r[0], bs:r[1], be:r[2], subj:r[3], tag:r[4], room:r[5],
+    i, bd:r[0], bs:r[1], be:r[2], subj:r[3], tag:r[4], room:(r[12] != null ? r[12] : r[5]), room0:(r[12] != null ? r[12] : r[5]),
     nd0:r[6], ns0:r[7], ne0:r[8], x0:!!r[9], n:r[10], e:r[11]||0,
     nd:r[6], ns:r[7], ne:r[8], x:!!r[9]
   }));
@@ -252,7 +252,7 @@ function weekLabel(){
   return [t, rng];
 }
 
-const changed = it => it.nd !== it.nd0 || it.ns !== it.ns0 || it.ne !== it.ne0 || it.x !== it.x0;
+const changed = it => it.nd !== it.nd0 || it.ns !== it.ns0 || it.ne !== it.ne0 || it.x !== it.x0 || (it.room||"") !== (it.room0||"");
 const nChanged = () => items.filter(changed).length;
 const nAll = () => nChanged() + adds.length;
 const dur = it => toMin(it.ne) - toMin(it.ns);
@@ -390,7 +390,7 @@ function render(first){
   if (tg && tg.BackButton) { try { (editIdx != null || editAdd || addOpen || step === "preview") ? tg.BackButton.show() : tg.BackButton.hide(); } catch(e){} }
 }
 
-function resetItem(it){ it.nd = it.nd0; it.ns = it.ns0; it.ne = it.ne0; it.x = it.x0; }
+function resetItem(it){ it.nd = it.nd0; it.ns = it.ns0; it.ne = it.ne0; it.x = it.x0; it.room = it.room0; }
 
 // раскладка пересекающихся блоков по «дорожкам»
 function layout(list){
@@ -529,6 +529,10 @@ function sheet(it){
   if (isPast(it)) {
     sh.append(el("div","warn","🕘 Эта пара уже прошла — прошлое менять нельзя." + (it.x0 ? " Она была отменена." : "")));
   } else if (!it.x) {
+    sh.append(el("div","lab","Кабинет"));
+    const rf = el("input","fld"); rf.type = "text"; rf.maxLength = 20; rf.placeholder = "Например: 305"; rf.value = it.room || "";
+    rf.onchange = () => { it.room = rf.value.trim().slice(0,20); haptic("light"); render(); };
+    sh.append(rf);
     sh.append(el("div","lab","Время пары"));
     const tm = el("div","tm");
     const l1 = el("label",null,`<small>Начало</small>`); const i1 = el("input"); i1.type = "time"; i1.value = it.ns; l1.append(i1);
@@ -635,7 +639,9 @@ function messageHtml(){
   const parts = addParts + items.filter(changed).map(it => {
     if (it.x) return `<div class="it">🚫 <b>${esc(it.subj)}</b><br><i>отменена</i> · ${origRange(it)}</div>`;
     if (it.x0) return `<div class="it">↩️ <b>${esc(it.subj)}</b><br><i>снова в силе</i> · ${newRange(it)}</div>`;
-    return `<div class="it">🔁 <b>${esc(it.subj)}</b><br>было: ${origRange(it)}<br><b>стало: ${newRange(it)}</b></div>`;
+    const rc = (it.room||"") !== (it.room0||"") ? `<br>📍 ауд.: ${esc(it.room0||"—")} → <b>${esc(it.room||"—")}</b>` : "";
+    if (it.nd === it.nd0 && it.ns === it.ns0 && it.ne === it.ne0) return `<div class="it">📍 <b>${esc(it.subj)}</b><br>${newRange(it)}${rc}</div>`;
+    return `<div class="it">🔁 <b>${esc(it.subj)}</b><br>было: ${origRange(it)}<br><b>стало: ${newRange(it)}</b>${rc}</div>`;
   }).join("");
   return `✏️ <b>Изменения в расписании</b>${parts}` +
     (comment.trim() ? `<div class="cm">💬 ${esc(comment.trim())}</div>` : "") + `<div class="by">Сообщил(а): староста</div>`;
@@ -660,7 +666,7 @@ function preview(){
 }
 
 async function apply(nt){
-  const ops = items.filter(changed).map(it => [it.i, it.nd, it.ns, it.x ? 1 : 0, it.ne]);
+  const ops = items.filter(changed).map(it => [it.i, it.nd, it.ns, it.x ? 1 : 0, it.ne, (it.room||"") !== (it.room0||"") ? (it.room||"") : null]);
   const aa = adds.map(a => [a.nd, a.ns, a.ne, a.subj, a.room]);
   if (!ops.length && !aa.length) return;
   const data = {w: D.o, h: D.h, nt: nt ? 1 : 0, c: comment.trim().slice(0,200), o: ops};
